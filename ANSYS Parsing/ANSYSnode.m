@@ -18,6 +18,8 @@ classdef ANSYSnode < handle
         thetaDotX
         thetaDotY
         associatedElements
+    end
+    properties (Hidden = true) % extrapolated_from_elements
         N11
         N22
         N12
@@ -40,21 +42,19 @@ classdef ANSYSnode < handle
         function value = get.coors(obj)
             value = [obj.x, obj.y, obj.z];
         end
-    end
-    methods(Hidden = true)
         function value = get_disp_or_vel(obj, type)
             switch type
-                case 'u'
+                case {'u', 'rad'}
                     value = obj.get_displacement('u');
-                case 'v'
+                case {'v', 'theta'}
                     value = obj.get_displacement('v');
-                case 'w'
+                case {'w', 'long'}
                     value = obj.get_displacement('w');
-                case {'udot', 'du'}
+                case {'udot', 'du', 'rdot'}
                     value = obj.get_velocity('u');
-                case {'vdot', 'dv'}
+                case {'vdot', 'dv', 'thdot'}
                     value = obj.get_velocity('v');
-                case {'wdot', 'dw'}
+                case {'wdot', 'dw', 'ldot'}
                     value = obj.get_velocity('w');
                 case 'thetaDotX'
                     value = obj.get_velocity('thetaX');
@@ -64,21 +64,21 @@ classdef ANSYSnode < handle
         end
         function add_disp_or_vel(obj, type, value)
             switch type
-                case 'u'
+                case {'u', 'rad'}
                     obj.u = value;
-                case 'v'
+                case {'v', 'theta'}
                     obj.v = value;
-                case 'w'
+                case {'w', 'long'}
                     obj.w = value;
-                case {'udot', 'du'}
+                case {'udot', 'du', 'rdot'}
                     obj.udot = value;
-                case {'vdot', 'dv'}
+                case {'vdot', 'dv', 'thdot'}
                     obj.vdot = value;
-                case {'wdot', 'dw'}
+                case {'wdot', 'dw', 'ldot'}
                     obj.wdot = value;
-                case 'thetaDotX'
+                case {'thetaDotX', 'omegaTh'}
                     obj.thetaDotX = value;
-                case 'thetaDotY'
+                case {'thetaDotY', 'omegaL'}
                     obj.thetaDotY = value;
                 otherwise
                     warning("Tried to set a displacement or velocity of a non-supported type")
@@ -88,7 +88,7 @@ classdef ANSYSnode < handle
             switch type
                 case {'N11', 'N22', 'N12', 'M11', 'M22', 'M12', 'Q1', 'Q2'}
                     value = obj.get_resultant(type);
-                case {'u', 'v', 'w', 'du', 'dv', 'dw', 'udot', 'vdot', 'wdot', 'thetaDotX', 'thetaDotY'}
+                case {'u', 'v', 'w', 'du', 'dv', 'dw', 'udot', 'vdot', 'wdot', 'thetaDotX', 'thetaDotY', 'rad', 'theta', 'long', 'rdot', 'thdot', 'ldot'}
                     value = obj.get_disp_or_vel(type);
             end
         end

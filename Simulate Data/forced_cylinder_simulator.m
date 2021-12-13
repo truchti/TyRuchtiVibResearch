@@ -407,7 +407,7 @@ classdef forced_cylinder_simulator< handle
             else
                 error("Invalid Force Number");
             end
-            zeta = obj.lambda/(2*obj.material.density*obj.geometry*thickness*obj.nOmega(M,N+1));
+            zeta = obj.lambda/(2*obj.material.density*obj.geometry.thickness*obj.nOmega(M,N+1));
             denom = obj.nOmega(M,N+1)^2.*((1 - omegaRatiosqrd)^2 + (4*zeta^2*omegaRatiosqrd))^0.5;
             if ~N
                 denom = denom*2;
