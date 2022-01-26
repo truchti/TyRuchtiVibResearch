@@ -63,6 +63,7 @@ classdef ANSYSnode < handle
             end
         end
         function add_disp_or_vel(obj, type, value)
+            %for ever and always
             switch type
                 case {'u', 'rad'}
                     obj.u = value;

@@ -6,9 +6,9 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
     properties (Hidden = true)
         extrapolatedToNodes = false;
         elementResultList = {'N11', 'N22', 'N12', 'M11', 'M22', 'M12', 'Q1', 'Q2'};
-        % u is displacement in the longitudinal direction
+        % u is displacement in the rad direct
         % v is displacement in theta direction 
-        % w is displacement in the radial direction
+        % w is displacement in the long direction
         nodeResultList = {'u', 'v', 'w', 'udot', 'vdot', 'wdot'};
         Fitter
         DotSpline
@@ -60,6 +60,24 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             view(90, 0)
             axis equal
             colorbar
+        end
+        function plot_flat_nodal_result(obj,type)
+            for e = 1:length(obj.elements)
+                [Xs, Ys, Zs] = obj.get_nodal_coordinates_from_element(e);
+                thetas = atan2(Ys,Xs);
+                Thetas = wrapTo2Pi(thetas);
+                if max(Thetas) - min(Thetas) > 5
+                    Thetas(Thetas== 0) = 2*pi;
+                end
+                rads = (Xs.^2 + Ys.^2).^(1/2);
+                rad = mean(rads);
+                nodeValues = obj.get_nodal_values_for_an_element(type, e);
+                patch(Thetas*rad, Zs, -.005*ones(size(rads)), real(nodeValues), 'EdgeColor', 'none');
+            end
+            colormap(gca, gray)
+            alpha(.9)
+            axis equal
+%             colorbar
         end
         function plot_geometry(obj)
             coors = zeros(length(obj.nodes),3);
@@ -139,13 +157,16 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             end
             quiver(Thetas'*rad, Zs', v1, v2)
         end
-        function plot_cyl_power_flow(obj)
+        function a = plot_cyl_power_flow(obj)
+            a = figure;
             if isempty(obj.qt)
                 obj.calculate_cyl_power_flow;
             end
-            [Thetas, rs, Zs] = obj.get_all_node_coordinates_in_cylindrical_coors();
-            rad = mean(rs);
-            quiver(Thetas'*rad, Zs', obj.qt, obj.ql)
+            [Thetas, Zs, rad] = obj.theta_longitudinal_coordinates_with_fixed_radius();
+            quiver(gca, Thetas'*rad, Zs', obj.qt, obj.ql)
+%             disps = obj.get_all_node_value_by_type('rad');
+            hold on;
+            obj.plot_flat_nodal_result('rad')
         end
         function plot_3D_cyl_power_flow(obj)
             if isempty(obj.qt)
@@ -165,7 +186,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             X = X-center(1);
             Y = Y-center(2);
             Z = height*Z;
-            aa = surf(X,Y,Z);
+            surf(X,Y,Z);
             alpha 0.2
         end
     end
@@ -245,33 +266,37 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             N22 = obj.get_all_node_value_by_type('N22');
             N12 = obj.get_all_node_value_by_type('N12');
         end
+        function [ths, longs, radius] = theta_longitudinal_coordinates_with_fixed_radius(obj)
+            [ths, rads, longs] = obj.get_all_node_coordinates_in_cylindrical_coors();
+            radius = mean(mean(rads));
+        end
         function calculate_angular_rotation_velocities(obj)
-            [ths, rads, longs] = obj.get_all_node_coordinates_in_cylindrical_coors;
-            rad = mean(mean(rads));
+            [ths, longs, rad] = obj.theta_longitudinal_coordinates_with_fixed_radius;
+            %radial velocity
             rdot = obj.get_all_node_value_by_type('rdot');
-            thdot = obj.get_all_node_value_by_type('thdot');
-%             OLdot = drad^2/(dzdt)
-%             Othdot = 1/rad* vdot-dw^2/dsdt
+%             OLdot = drad^2/(dzdt) = drdotdz
+%             Othdot = dradial^2/dsdt = dradial^2/(rad&*dthdt) =
+%             drdot/dth *1/a;
             % real and imaginary for Olong then real and imag for Otheta
-            data = [real(rdot)', imag(rdot)', real(thdot-1/rad*(rdot))', imag(thdot-1/rad*(rdot))'];
+            data = [real(rdot)', imag(rdot)', real(rdot/rad)', imag(rdot/rad)'];
             obj.Fitter = quinticBSplineSurfaceFitter([ths, longs], data, {"closed", "open"}, [15,15]);
             obj.Fitter.fit_spline_surfaces();
             obj.DotSpline = obj.Fitter.output_solved_spline_evaluator();
-
-            %take derivaqtives wrt th and long vars
+            %take derivatives wrt th and long vars
+            %for each node evaluate derivatives and save value
             for n = 1:length(obj.nodes)
-                vDot = obj.nodes(n).get_value_by_type('thdot');
-                vDotr = real(vDot);
-                vDoti = imag(vDot);
-                ThetaDotThetaReal= vDotr - obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 1, [0,1]);
-                ThetaDotThetaImag= vDoti - obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 2, [0,1]);
-                ThDTh =  complex(ThetaDotThetaReal, ThetaDotThetaImag);
-                ThetaDotLongReal= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 1, [1,0]);
-                ThetaDotLongImag= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 2, [1,0]);
-                ThDL = complex(ThetaDotLongReal, ThetaDotLongImag);
+                
+                                                                                   %param, param, fitting data, derive order of 1st and 2nd param
+                BetaDotThetaReal= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 1, [0,1]); %e.g. dw/dl real
+                BetaDotThetaImag= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 2, [0,1]); % dw/dl imag
+                betaDTh =  complex(BetaDotThetaReal, BetaDotThetaImag);
+                                                                                     %param, param, fitting data, derive order of 1st and 2nd param
+                BetaDotLongReal= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 3, [1,0]); % d(w/a)/dth real
+                BetaDotLongImag= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 4, [1,0]); % d(w/a)/dth real
+                betaDL = complex(BetaDotLongReal, BetaDotLongImag);
                 % save values to node
-                obj.nodes(n).add_disp_or_vel('betaDotTh', ThDTh);
-                obj.nodes(n).add_disp_or_vel('betaDotLong',ThDL);
+                obj.nodes(n).add_disp_or_vel('betaDotTh', betaDTh);
+                obj.nodes(n).add_disp_or_vel('betaDotLong',betaDL);
             end
             
         end

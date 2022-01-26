@@ -65,7 +65,6 @@ classdef ElementAndNodeParser < handle
             else
                 mesh = ANSYS_181Shell_Mesh(obj.nodes, obj.elements);
             end
-            mesh.extrapolate_all_resultants_to_nodes();
             mesh.calculate_angular_rotation_velocities();
         end
         end
@@ -165,7 +164,7 @@ classdef ElementAndNodeParser < handle
             end
         end
         function add_data_to_respective_node_object(obj, type)
-            for i = 1:length(obj.nodes)
+            for i = 1:length(obj.nodes)  %% make try catch in future
                 if ~isempty(obj.realNodeData)
                     realPart = obj.realNodeData(i);
                 else
