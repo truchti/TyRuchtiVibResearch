@@ -44,15 +44,15 @@ classdef sinusoidalForce
             value = obj.location(2);
         end
         function obj = create_default_1(obj)
-            obj.location  = [.1, -60*pi/180];
-            obj.magnitude = 40;
-            obj.frequency = 120;
+            obj.location  = [.025, 0*pi/180];
+            obj.magnitude = 1;
+            obj.frequency = 3050;
             obj.phase = 0;
         end
         function obj = create_default_2(obj)
-            obj.location  = [.4, -240*pi/180];
-            obj.magnitude = 40;
-            obj.frequency = 120;
+            obj.location  = [.135, 180*pi/180];
+            obj.magnitude = 1;
+            obj.frequency = 3050;
             obj.phase = 170;
         end
         function obj = create_default_rect_1(obj)

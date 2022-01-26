@@ -8,6 +8,7 @@ classdef forced_cylinder_simulator< handle
         force2
         geometry
         mesh
+        saveFolder = 'C:\Users\ME\Desktop\RandomData\';
     end
     properties(Dependent)
         fileName
@@ -36,7 +37,6 @@ classdef forced_cylinder_simulator< handle
         WtotalD
         WtotalF
         data
-        saveFolder
     end
     methods
         function obj = forced_cylinder_simulator(geometry, forces, material, mesh)
@@ -132,7 +132,6 @@ classdef forced_cylinder_simulator< handle
                 loopedValues(:,:,i) = [values(:,:,i)  values(:,1,i)];
 %                 iloopedValues(:,:,i) = [ivalues(:,:,i) ivalues(:,1,i)];
             end
-            figure(1)
             s = surf(x,y,z,loopedValues(:,:,1));
             axis equal
             s.EdgeAlpha = 0.0;

@@ -4,7 +4,7 @@ classdef cylinderGeometry
         height
         thickness
     end
-    properties (Dependent)
+    properties (Dependent = true, Hidden = true)
         mu
     end
     methods
@@ -21,9 +21,9 @@ classdef cylinderGeometry
             value = obj.thickness^2/(12*obj.radius^2);
         end
         function obj = create_default(obj)
-            obj.radius = .0635;
-            obj.thickness = .00163;
-            obj.height = .502;
+            obj.radius = .02;
+            obj.thickness = 2e-3;
+            obj.height = .160;
         end
     end
 end
