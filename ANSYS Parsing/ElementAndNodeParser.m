@@ -24,6 +24,7 @@ classdef ElementAndNodeParser < handle
         projectName = 'Model'
         listOfElemResults = {'N11', 'N22', 'N12', 'M11', 'M22', 'M12', 'Q1', 'Q2'};
         listOfNodalResults = {'u', 'v', 'w', 'udot', 'vdot', 'wdot'};
+        isCylinder = false;
     end
     methods
         function obj = ElementAndNodeParser(file, dataDirectory)
@@ -59,14 +60,18 @@ classdef ElementAndNodeParser < handle
             obj.add_element_relation_to_nodes();
         end        
         function mesh = export_mesh_object(obj)
-            mesh = ANSYS_181Shell_Mesh(obj.nodes, obj.elements);
+            if obj.isCylinder
+                mesh = ANSYS_181Shell_Cylindrical_Mesh(obj.nodes, obj.elements, obj.listOfNodalResults);
+            else
+                mesh = ANSYS_181Shell_Mesh(obj.nodes, obj.elements);
+            end
             mesh.extrapolate_all_resultants_to_nodes();
-            mesh.calculate_theta_dots();
+            mesh.calculate_angular_rotation_velocities();
         end
         end
     methods (Hidden = true)
         function set_as_cylinder(obj)
-            obj.listOfNodalResults = {'t','r', 'z', 'tdot', 'rdot', 'zdot'};
+            obj.listOfNodalResults = {'theta','rad', 'long', 'thdot', 'rdot', 'ldot'};
             obj.isCylinder = true;
         end
         function choose_ds_dat_file(obj)

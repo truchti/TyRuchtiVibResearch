@@ -9,7 +9,7 @@ classdef ANSYS_181Shell_Mesh < handle
         elementResultList = {'N11', 'N22', 'N12', 'M11', 'M22', 'M12', 'Q1', 'Q2'};
         nodeResultList = {'u', 'v', 'w', 'udot', 'vdot', 'wdot'};
         Fitter
-        wDotSpline
+        DotSpline
     end
     methods
         function obj = ANSYS_181Shell_Mesh(nodes, elements, eleResultTypes, nodeResultTypes)
@@ -155,21 +155,21 @@ classdef ANSYS_181Shell_Mesh < handle
             N22 = obj.get_all_node_value_by_type('N22');
             N12 = obj.get_all_node_value_by_type('N12');
         end
-        function calculate_theta_dots(obj)
+        function calculate_theta_dots(obj)          
             [Xs, Ys, ~] =obj.get_all_node_coordinates();
             values = obj.get_all_node_value_by_type('wdot');
             data = [real(values)' imag(values)'];
             % create spline surface and interpolate
             obj.Fitter = quinticBSplineSurfaceFitter([Xs,Ys], data, {"open","open"}, [15,15]);
             obj.Fitter.fit_spline_surfaces();
-            obj.wDotSpline = obj.Fitter.output_solved_spline_evaluator();
+            obj.DotSpline = obj.Fitter.output_solved_spline_evaluator();
             % take deriviatives wrt x and y
             for n= 1:length(obj.nodes)
-                thetaDotXReal = obj.wDotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 1, [0,1]);
-                thetaDotXImag = obj.wDotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 2, [0,1]);
+                thetaDotXReal = obj.DotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 1, [0,1]);
+                thetaDotXImag = obj.DotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 2, [0,1]);
                 thetaDotX = complex(thetaDotXReal, thetaDotXImag);
-                thetaDotYReal = obj.wDotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 1, [1,0]);
-                thetaDotYImag = obj.wDotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 2, [1,0]);
+                thetaDotYReal = obj.DotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 1, [1,0]);
+                thetaDotYImag = obj.DotSpline.evaluate_spline_number_at_parameters(Xs(n), Ys(n), 2, [1,0]);
                 thetaDotY = complex(thetaDotYReal, thetaDotYImag);
                 %save values
                 obj.nodes(n).add_disp_or_vel('thetaDotX', thetaDotX)

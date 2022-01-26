@@ -15,8 +15,8 @@ classdef ANSYSnode < handle
         udot
         vdot
         wdot
-        thetaDotX
-        thetaDotY
+        betaDotX
+        betaDotY
         associatedElements
     end
     properties (Hidden = true) % extrapolated_from_elements
@@ -56,9 +56,9 @@ classdef ANSYSnode < handle
                     value = obj.get_velocity('v');
                 case {'wdot', 'dw', 'ldot'}
                     value = obj.get_velocity('w');
-                case 'thetaDotX'
+                case {'betaDotX', 'betaDotTh'}
                     value = obj.get_velocity('thetaX');
-                case 'thetaDotY'
+                case {'betaDotY', 'betaDotLong'}
                     value = obj.get_velocity('thetaY');
             end
         end
@@ -76,10 +76,10 @@ classdef ANSYSnode < handle
                     obj.vdot = value;
                 case {'wdot', 'dw', 'ldot'}
                     obj.wdot = value;
-                case {'thetaDotX', 'omegaTh'}
-                    obj.thetaDotX = value;
-                case {'thetaDotY', 'omegaL'}
-                    obj.thetaDotY = value;
+                case {'betaDotX', 'betaDotTh'}
+                    obj.betaDotX = value;
+                case {'betaDotY', 'betaDotLong'}
+                    obj.betaDotY = value;
                 otherwise
                     warning("Tried to set a displacement or velocity of a non-supported type")
             end
@@ -88,7 +88,7 @@ classdef ANSYSnode < handle
             switch type
                 case {'N11', 'N22', 'N12', 'M11', 'M22', 'M12', 'Q1', 'Q2'}
                     value = obj.get_resultant(type);
-                case {'u', 'v', 'w', 'du', 'dv', 'dw', 'udot', 'vdot', 'wdot', 'thetaDotX', 'thetaDotY', 'rad', 'theta', 'long', 'rdot', 'thdot', 'ldot'}
+                case {'u', 'v', 'w', 'du', 'dv', 'dw', 'udot', 'vdot', 'wdot', 'betaDotX', 'betaDotY', 'rad', 'theta', 'long', 'rdot', 'thdot', 'ldot', 'betaDotTh', 'betaDotLong'}
                     value = obj.get_disp_or_vel(type);
             end
         end
@@ -111,16 +111,16 @@ classdef ANSYSnode < handle
                 case 'w'
                     value = obj.wdot;
                 case 'thetaX'
-                    if isempty(obj.thetaDotX)
+                    if isempty(obj.betaDotX)
                         value = NaN;
                     else
-                        value = obj.thetaDotX;
+                        value = obj.betaDotX;
                     end
                 case 'thetaY'
-                    if isempty(obj.thetaDotY)
+                    if isempty(obj.betaDotY)
                         value =NaN;
                     else
-                        value = obj.thetaDotY;
+                        value = obj.betaDotY;
                     end
             end
         end
