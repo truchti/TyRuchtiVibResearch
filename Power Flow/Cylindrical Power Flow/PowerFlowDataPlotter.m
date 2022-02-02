@@ -15,7 +15,7 @@ classdef PowerFlowDataPlotter
         function plot_flat(obj, radius, forceLocs)
             [Z, Theta] = meshgrid(obj.eta, obj.xi);
             if radius ~= 0
-                    Theta = radius*Theta;
+                Theta = radius*Theta;
             end
             quiver(Theta, Z, obj.qt, obj.ql,'color', [1 0 .2]);
             if nargin>2 && ~isempty(forceLocs)

@@ -44,6 +44,14 @@ classdef Cylindrical_Power_Flow <handle
         iqtheta
         iqlong
     end
+    properties (Hidden = true)
+        shearPowerLong
+        NormalPowerLong
+        MomentPowerLong
+        shearPowerTang
+        NormalPowerTang
+        MomentPowerTang
+    end
     methods
         function obj = Cylindrical_Power_Flow(SLDV_data, cylinderProps)
             if isa(SLDV_data, 'SLDV_data')
@@ -80,6 +88,19 @@ classdef Cylindrical_Power_Flow <handle
             end
             obj.create_power_flow_plotter();
         end
+        %% plotting functions
+        function plot_component(obj, component)
+            switch component
+                case {'t'; 'theta'; 'r'; 'rad'; 'l'; 'long'}
+                    obj.PowerFlowResultants.plot_displacement(component);
+                case {'Nt'; 'Nl'; 'Ntl'; 'Nlt'; 'Mt'; 'Ml'; 'Mtl'; 'Mlt'; 'Qt'; 'Ql'}
+                    obj.PowerFlowResultants.plot_resultant(component)
+                case {'dt'; 'dtheta'; 'dr'; 'drad'; 'dl'; 'dlong'}
+                    warning('Velocity plots not implemented')
+                otherwise
+                    warning('Input not valid')
+            end            
+        end
         function plot(obj, unitTheta, forceLocs)
             if nargin< 3
                 forceLocs = [];
@@ -97,6 +118,36 @@ classdef Cylindrical_Power_Flow <handle
                 ylabel("Height")
                 frame_h = gcf();
                 frame_h.WindowState = 'maximized';
+            else
+                warning("Power flow has not been calculated")
+            end
+        end
+        function plot_part_of_power_flow(obj, part)
+            if ~isempty(obj.PFPlotter)
+            obj.plot_displacement_grayscale(1);
+            hold on
+            [Z, Theta] = meshgrid(obj.eta, obj.xi);
+            ThetaDist =  obj.cylinderProperties.radius* Theta;
+            switch part 
+                case {1, 'shear', 'Q', 'Shear'}
+                    U = real(obj.shearPowerTang);
+                    V = real(obj.shearPowerLong);
+                case {2, 'normal', 'Normal', 'N'}
+                    U = real(obj.NormalPowerTang);
+                    V = real(obj.NormalPowerLong);
+                case {3, 'moment', 'Moment', 'M'}
+                    U = real(obj.MomentPowerTang);
+                    V = real(obj.MomentPowerLong);
+            end
+            quiver(ThetaDist, Z, U,V)
+            view(0,90); % make it so that the plane is perpendicular to camera
+            hold off
+            xlabel("Distance around Circumfrence")
+            ylabel("Height")
+            frame_h = gcf();
+            frame_h.WindowState = 'maximized';
+            else
+                warning("Power flow has not been calculated")
             end
         end
         function plot_displacement_grayscale(obj, unitTheta)
@@ -190,12 +241,12 @@ classdef Cylindrical_Power_Flow <handle
                     title('d^3r/d\eta^3')
             end
         end
-        
+        %%
         function set_control_points(obj, xi,eta)
             obj.numControlPoints = [xi,eta];
             obj.dirty = true;
         end
-        function set_evaluation_points(obj, xi, eta)
+        function set_number_evaluation_points(obj, xi, eta)
             obj.numberOfEvaluationPnts = [xi,eta];
             obj.dirty = true;
         end
@@ -226,13 +277,19 @@ classdef Cylindrical_Power_Flow <handle
             end
             % this gets the 10 resultants from the resultant calculator object
             [Nt, Nl, Ntl, Nlt, Mt, Ml, Mtl, Mlt, Qt, Ql, obj.PowerFlowResultants] = obj.PowerFlowResultants.calculate_resultants(xi, eta);
-            [Eta, Xi] = meshgrid( obj.eta, obj.xi);
-            surf(Xi, Eta, real(Qt))
+%             [Eta, Xi] = meshgrid( obj.eta, obj.xi);
+            
             % this calculates the conjugates of the various velocity
             % components
             [vtheta, vrad, vlong, omegatheta, omegalong] = obj.calculate_conjugate_velocities(xi,eta);
-            fullqtheta = -Qt.*vrad + Nt.*vtheta + Ntl.*vlong +Mtl.*omegalong + Mt.*omegatheta;
-            fullqlong = -Ql.*vrad + Nlt.*vtheta + Nl.*vlong + Ml.*omegalong + Mlt.*omegatheta;
+            obj.shearPowerLong = -Ql.*vrad;
+            obj.NormalPowerLong = Nlt.*vtheta + Nl.*vlong;
+            obj.MomentPowerLong = Ml.*omegatheta - Mlt.*omegalong;
+            obj.shearPowerTang = -Qt.*vrad ;
+            obj.NormalPowerTang = Nt.*vtheta + Ntl.*vlong;
+            obj.MomentPowerTang = Mtl.*omegatheta - Mt.*omegalong;
+            fullqtheta = -Qt.*vrad + Nt.*vtheta + Ntl.*vlong +Mtl.*omegatheta - Mt.*omegalong;
+            fullqlong = -Ql.*vrad + Nlt.*vtheta + Nl.*vlong + Ml.*omegatheta - Mlt.*omegalong;
             % save both the real and imaginary components of the power flow
             obj.qtheta = 1/2*real(fullqtheta);
             obj.qlong = 1/2*real(fullqlong);
@@ -258,7 +315,7 @@ classdef Cylindrical_Power_Flow <handle
             % angluar velocity abt theta is the spatialderivative wrt long of the theta velocity
             omegat = conj(obj.fieldEvaluator.evaluate_complex_value_at_parameters(xi, eta, 'vel', 1, [0 1]));
             % angular velocity abt long i sthe spatialderiavtive wrt theta of the long velocity
-            omegaz = conj(obj.fieldEvaluator.evaluate_complex_value_at_parameters(xi, eta, 'vel', 3, [1 0]));
+            omegaz = 1/obj.cylinderProperties.radius * conj(obj.fieldEvaluator.evaluate_complex_value_at_parameters(xi, eta, 'vel', 3, [1 0]));
         end
         function calculate_xi_and_eta(obj)
             % this calculates equally spaced evaluation parameter vectors
