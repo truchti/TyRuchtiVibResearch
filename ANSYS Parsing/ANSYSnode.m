@@ -4,6 +4,7 @@ classdef ANSYSnode < handle
         x
         y
         z
+        disabled = false;
     end
     properties(Dependent)
         coors
@@ -39,20 +40,23 @@ classdef ANSYSnode < handle
                 obj.z = z;
             end
         end
+        function disable_node(obj)
+            obj.disabled = true;
+        end
         function value = get.coors(obj)
             value = [obj.x, obj.y, obj.z];
         end
         function value = get_disp_or_vel(obj, type)
             switch type
-                case {'u', 'rad'}
+                case {'u', 'rad', 'r'}
                     value = obj.get_displacement('u');
-                case {'v', 'theta'}
+                case {'v', 'theta', 't'}
                     value = obj.get_displacement('v');
-                case {'w', 'long'}
+                case {'w', 'long', 'l'}
                     value = obj.get_displacement('w');
                 case {'udot', 'du', 'rdot'}
                     value = obj.get_velocity('u');
-                case {'vdot', 'dv', 'thdot'}
+                case {'vdot', 'dv', 'thdot', 'tdot', 'thetadot'}
                     value = obj.get_velocity('v');
                 case {'wdot', 'dw', 'ldot'}
                     value = obj.get_velocity('w');
@@ -147,21 +151,21 @@ classdef ANSYSnode < handle
         end
         function value = get_resultant(obj, type)
             switch type
-                case 'N11'
+                case {'N11', 'Nt'}
                     value = obj.N11;
-                case 'N22'
+                case {'N22', 'Nl'}
                     value = obj.N22;
-                case 'N12' 
+                case {'N12', 'Nlt', 'Ntl'}
                     value = obj.N12;
-                case 'M11'
+                case {'M11', 'Mt'}
                     value = obj.M11;
-                case 'M22'
+                case {'M22', 'Ml'}
                     value = obj.M22;
-                case 'M12'
+                case {'M12', 'Mlt', 'Mtl'}
                     value = obj.M12;
-                case 'Q1'
+                case {'Q1', 'Qt'}
                     value = obj.Q1;
-                case 'Q2'
+                case {'Q2', 'Ql'}
                     value = obj.Q2;
             end
             if isempty(value)

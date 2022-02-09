@@ -26,13 +26,16 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         TNxx
         TNxy
         TQ
+        nodeIndxMap
+        thetaShift
     end
     methods
-        function obj = ANSYS_181Shell_Cylindrical_Mesh(nodes, elements, nodeResultTypes)
+        function obj = ANSYS_181Shell_Cylindrical_Mesh(nodes, elements, nodeResultTypes, IndxMap)
             obj.nodes = nodes;
             obj.elements = elements;
             if nargin > 2
                 obj.nodeResultList = nodeResultTypes;
+                obj.nodeIndxMap = IndxMap;
             end
             obj.extrapolate_all_resultants_to_nodes();
         end
@@ -65,19 +68,45 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             for e = 1:length(obj.elements)
                 [Xs, Ys, Zs] = obj.get_nodal_coordinates_from_element(e);
                 thetas = atan2(Ys,Xs);
-                Thetas = wrapTo2Pi(thetas);
-                if max(Thetas) - min(Thetas) > 5
-                    Thetas(Thetas== 0) = 2*pi;
+                Thetas = wrapTo2Pi(thetas+obj.thetaShift);
+                if max(Thetas) - min(Thetas) > 3
+                    Thetas(Thetas<3) = Thetas(Thetas<3)+ 2*pi;
                 end
                 rads = (Xs.^2 + Ys.^2).^(1/2);
                 rad = mean(rads);
                 nodeValues = obj.get_nodal_values_for_an_element(type, e);
-                patch(Thetas*rad, Zs, -.005*ones(size(rads)), real(nodeValues), 'EdgeColor', 'none');
+                patch(Thetas*rad, Zs, -.005*ones(size(rads)), imag(nodeValues), 'EdgeColor', 'none');
             end
-            colormap(gca, gray)
-            alpha(.9)
+            colormap(gca, jet)
+%             alpha(.9)
             axis equal
-%             colorbar
+            colorbar
+        end
+        function power_flow_component_magnitudes(obj)
+            clc
+            fprintf('Magnitude of Power Contributions by component in Longitudinal Direction:\n')
+            ShearMag = max(max(abs(obj.LQ)));
+            NxxMag = max(max(abs(obj.LNxx)));
+            NxyMag = max(max(abs(obj.LNxy)));
+            MxxMag = max(max(abs(obj.LMxx)));
+            MxyMag = max(max(abs(obj.LMxy)));
+            fprintf('Shear:\t\t\t %d\n', ShearMag)
+            fprintf('Normal:\t\t\t %d\n', NxxMag)
+            fprintf('CrossNormal:\t %d\n', NxyMag)
+            fprintf('Moment:\t\t\t %d\n', MxxMag)
+            fprintf('CrossMoment:\t %d\n\n', MxyMag)
+            ShearMag = max(max(abs(obj.TQ)));
+            NxxMag = max(max(abs(obj.TNxx)));
+            NxyMag = max(max(abs(obj.TNxy)));
+            MxxMag = max(max(abs(obj.TMxx)));
+            MxyMag = max(max(abs(obj.TMxy)));
+            fprintf('Magnitude of Power Contributions by component in Tangential Direction:\n')
+            fprintf('Shear:\t\t\t %d\n', ShearMag)
+            fprintf('Normal:\t\t\t %d\n', NxxMag)
+            fprintf('CrossNormal:\t %d\n', NxyMag)
+            fprintf('Moment:\t\t\t %d\n', MxxMag)
+            fprintf('CrossMoment:\t %d\n\n', MxyMag)
+            
         end
         function plot_geometry(obj)
             coors = zeros(length(obj.nodes),3);
@@ -103,8 +132,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         function calculate_cyl_power_flow(obj)
             %resultants
             [Qt, Ql, Mt, Ml, Mtl, Nt, Nl, Ntl] = obj.get_all_resultants();
-            [~, radii, ~] = obj.get_all_node_coordinates_in_cylindrical_coors();
-            rad = mean(mean(radii));
+            [~, ~, rad] = obj.theta_longitudinal_coordinates_with_fixed_radius();
             Nlt = Ntl;
             Mlt = Mtl;
             %velocities
@@ -116,17 +144,17 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             omegaL = obj.get_all_node_value_by_type('betaDotLong');
             %power components
             fullqtheta =  - Nt.*vdot - Ntl.*vlong -Qt.*wdot +Mtl.*omegaTh - Mt.*omegaL;
-            fullqlong = -Ql.*wdot - Nlt.*thetadot - Nl.*vlong + Ml.*omegaTh - Mlt.*omegaL;
+            fullqlong = -Ql.*wdot - Nlt.*vdot - Nl.*vlong + Ml.*omegaTh - Mlt.*omegaL;
             obj.TQ =-Qt.*wdot;
             obj.LQ =  -Ql.*wdot;
             obj.TMxx = - Mt.*omegaL;
             obj.LMxx = Ml.*omegaTh;
             obj.TMxy = Mtl.*omegaTh;
             obj.LMxy = - Mlt.*omegaL;
-            obj.TNxx =- Nt.*thetadot;
+            obj.TNxx =- Nt.*thetadot*rad;
             obj.LNxx = - Nl.*vlong;
             obj.TNxy =- Ntl.*vlong;
-            obj.LNxy =  - Nlt.*thetadot;
+            obj.LNxy =  - Nlt.*thetadot*rad;
             obj.qt = 1/2*real(fullqtheta);
             obj.ql = 1/2*real(fullqlong);
             obj.qtimag = 1/2*imag(fullqtheta);
@@ -142,31 +170,45 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
                 case 'Q'
                     v1 = obj.TQ;
                     v2 = obj.LQ;
+                    ttl = 'Shear Contribution';
                 case 'Mxx'                    
                     v1 = obj.TMxx;
                     v2 = obj.LMxx;
+                    ttl = 'Bending Moment Contribution';
                 case 'Mxy'                    
                     v1 = obj.TMxy;
                     v2 = obj.LMxy;
+                    ttl = 'CrossBending Moment Contribution';
                 case 'Nxx'                    
                     v1 = obj.TNxx;
                     v2 = obj.LNxx;
+                    ttl = 'Normal Contribution';
                 case 'Nxy'
                     v1 = obj.TNxy;
                     v2 = obj.LNxy;
+                    ttl = 'Cross Normal Contribution';
             end
-            quiver(Thetas'*rad, Zs', v1, v2)
+            quiver(Thetas'*rad, Zs', real(v1), real(v2))
+            title(ttl);
         end
-        function a = plot_cyl_power_flow(obj)
+        function a = plot_cyl_power_flow(obj, backPlot)
+            if nargin< 2 
+                backPlot = false;
+            end
             a = figure;
             if isempty(obj.qt)
                 obj.calculate_cyl_power_flow;
             end
             [Thetas, Zs, rad] = obj.theta_longitudinal_coordinates_with_fixed_radius();
             quiver(gca, Thetas'*rad, Zs', obj.qt, obj.ql)
-%             disps = obj.get_all_node_value_by_type('rad');
-            hold on;
-            obj.plot_flat_nodal_result('rad')
+            if backPlot
+                hold on;
+                obj.plot_flat_nodal_result('rad')
+                hold off;
+            end
+            hold on
+%             scatter([0, pi*.02], [.135 .025],100, 'xr')
+            hold off;
         end
         function plot_3D_cyl_power_flow(obj)
             if isempty(obj.qt)
@@ -195,7 +237,8 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             ele = obj.elements(elementNumber);
             allCoors = [];
             for j = 1:length(ele.nodeNums)
-                allCoors = [allCoors; obj.nodes(ele.nodeNums(j)).coors];
+                indx = obj.nodeIndxMap(ele.nodeNums(j));
+                allCoors = [allCoors; obj.nodes(indx).coors];
             end
             if nargout == 1
                 Xs = allCoors;
@@ -208,13 +251,15 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         function values = get_nodal_values_for_an_element(obj, type, element)
             ele = obj.elements(element);
             values = [];
-            if any(strcmp(obj.elementResultList,type))
+            if contains(type,'Q') ||contains(type,'N')||contains(type,'M')
                 for i = 1:length(ele.nodeNums)
-                    values = [values; obj.nodes(ele.nodeNums(i)).get_resultant(type)]; %#ok<*AGROW>
+                    indx = obj.nodeIndxMap(ele.nodeNums(i));
+                    values = [values; obj.nodes(indx).get_resultant(type)]; %#ok<*AGROW>
                 end
             else
                 for i = 1:length(ele.nodeNums)
-                    values = [values; obj.nodes(ele.nodeNums(i)).get_disp_or_vel(type)];
+                    indx = obj.nodeIndxMap(ele.nodeNums(i));
+                    values = [values; obj.nodes(indx).get_disp_or_vel(type)];
                 end
             end
         end
@@ -248,7 +293,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         function [Thetas, Radii, Zs] = get_all_node_coordinates_in_cylindrical_coors(obj)
             [Xs, Ys, Zs] = obj.get_all_node_coordinates();
             [Thetas, Radii, Zs] = cart2pol(Xs, Ys, Zs);
-            Thetas = wrapTo2Pi(Thetas);
+            Thetas = wrapTo2Pi(Thetas+obj.thetaShift);
         end
         function values = get_all_node_value_by_type(obj, type)
             values = zeros(size(obj.nodes));
@@ -272,6 +317,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         end
         function calculate_angular_rotation_velocities(obj)
             [ths, longs, rad] = obj.theta_longitudinal_coordinates_with_fixed_radius;
+            longs = longs - min(longs);
             %radial velocity
             rdot = obj.get_all_node_value_by_type('rdot');
 %             OLdot = drad^2/(dzdt) = drdotdz

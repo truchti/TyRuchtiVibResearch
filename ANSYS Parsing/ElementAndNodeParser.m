@@ -25,6 +25,7 @@ classdef ElementAndNodeParser < handle
         listOfElemResults = {'N11', 'N22', 'N12', 'M11', 'M22', 'M12', 'Q1', 'Q2'};
         listOfNodalResults = {'u', 'v', 'w', 'udot', 'vdot', 'wdot'};
         isCylinder = false;
+        nodeNumToIndex
     end
     methods
         function obj = ElementAndNodeParser(file, dataDirectory)
@@ -59,11 +60,14 @@ classdef ElementAndNodeParser < handle
             obj.read_in_all_nodal_results();
             obj.add_element_relation_to_nodes();
         end        
-        function mesh = export_mesh_object(obj)
+        function mesh = export_mesh_object(obj, thetaShift)
             if obj.isCylinder
-                mesh = ANSYS_181Shell_Cylindrical_Mesh(obj.nodes, obj.elements, obj.listOfNodalResults);
+                mesh = ANSYS_181Shell_Cylindrical_Mesh(obj.nodes, obj.elements, obj.listOfNodalResults, obj.nodeNumToIndex);
             else
                 mesh = ANSYS_181Shell_Mesh(obj.nodes, obj.elements);
+            end
+            if nargin>1 
+                mesh.thetaShift = thetaShift;
             end
             mesh.calculate_angular_rotation_velocities();
         end
@@ -103,7 +107,8 @@ classdef ElementAndNodeParser < handle
             for i = 1:length(obj.elements)
                 el = obj.elements(i);
                 for j = 1:length(el.nodeNums)
-                    obj.nodes(el.nodeNums(j)).link_to_an_element(el.number);
+                    indx = obj.nodeNumToIndex(el.nodeNums(j));
+                    obj.nodes(indx).link_to_an_element(el.number);
                 end
             end
         end
@@ -128,6 +133,15 @@ classdef ElementAndNodeParser < handle
                 obj.parse_complex_node_results(realFileName, imagFileName)
                 obj.add_data_to_respective_node_object(obj.listOfNodalResults{i});
             end
+            obj.mapNodeNumberToIndex()
+        end
+        function mapNodeNumberToIndex(obj)
+            ind = 1:length(obj.nodes);
+            num = zeros(size(ind));
+            for i = 1:length(obj.nodes)
+                num(i) = obj.nodes(i).number;
+            end
+            obj.nodeNumToIndex = containers.Map(num, ind);
         end
         function read_in_nodes(obj)
             if ~obj.foundNodes
@@ -164,16 +178,17 @@ classdef ElementAndNodeParser < handle
             end
         end
         function add_data_to_respective_node_object(obj, type)
-            for i = 1:length(obj.nodes)  %% make try catch in future
-                if ~isempty(obj.realNodeData)
-                    realPart = obj.realNodeData(i);
-                else
-                    realPart = 0;
+            for i = length(obj.nodes):-1:1
+                n = obj.nodes(i).number;
+                try realPart = obj.realNodeData(n);
+                catch
+                    obj.nodes(i) = [];
+                    continue;
                 end
-                if ~isempty(obj.imagNodeData)
-                    imagPart = obj.imagNodeData(i);
-                else
-                    imagPart = 0;
+                try imagPart = obj.imagNodeData(n);
+                catch
+                    obj.nodes(i) = [];
+                    continue;
                 end
                 obj.nodes(i).add_disp_or_vel(type, realPart + 1i*imagPart)
             end
