@@ -90,13 +90,14 @@ classdef Cylindrical_Power_Flow <handle
         end
         %% plotting functions
         function plot_component(obj, component)
+            
             switch component
                 case {'t'; 'theta'; 'r'; 'rad'; 'l'; 'long'}
                     obj.PowerFlowResultants.plot_displacement(component);
                 case {'Nt'; 'Nl'; 'Ntl'; 'Nlt'; 'Mt'; 'Ml'; 'Mtl'; 'Mlt'; 'Qt'; 'Ql'}
                     obj.PowerFlowResultants.plot_resultant(component)
-                case {'dt'; 'dtheta'; 'dr'; 'drad'; 'dl'; 'dlong'}
-                    warning('Velocity plots not implemented')
+                case {'tdot'; 'thetadot'; 'rdot'; 'raddot'; 'ldot'; 'longdot'}
+                    obj.PowerFlowResultants.plot_velocity(component);
                 otherwise
                     warning('Input not valid')
             end            
@@ -168,7 +169,7 @@ classdef Cylindrical_Power_Flow <handle
 %             s = surf(Theta, Z, zeros(size(amp)), RadDisp);
             s = surf(Theta, Z, zeros(size(amp)), amp);
             s.EdgeAlpha = 0;
-            s.FaceAlpha = .9;
+            s.FaceAlpha = .2;
             s.FaceColor = 'interp';
         end  
         function plot3d(obj)

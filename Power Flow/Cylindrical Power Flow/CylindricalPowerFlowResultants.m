@@ -20,14 +20,17 @@ classdef CylindricalPowerFlowResultants
         mu % poissons
         % longitudinal displacement derivatives
         long
+        longVel
         dlong_dz
         dlong_dth
         %tangential displacement derivatives
         tang
+        tangVel
         dtang_dz
         dtang_dth
         % radial displacement and 1st 2nd and 3rd order derivatives
         rad
+        radVel
         drad_dth
         drad_dz
         d2rad_dz2
@@ -117,21 +120,54 @@ classdef CylindricalPowerFlowResultants
             end
             rValues = real(values);
             iValues = imag(values);
-            [Eta, Xi] = meshgrid(obj.eta, obj.xi);
+            [Eta, Xi] = meshgrid(obj.eta, wrapTo2Pi(obj.xi));
             X = cos(Xi)*obj.cylProps.radius;
             Y = sin(Xi)*obj.cylProps.radius;
             
-            figure
-            subplot(1,2,1)
-            surf(X, Y, Eta, rValues)
+%             figure
+%             subplot(1,2,1)
+            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  iValues, 'EdgeColor', 'none')
+            view(0,90);
+            colormap jet
+%             surf(X, Y, Eta, rValues)
             title('Real Values')
-            axis equal
+%             axis equal
             colorbar
-            subplot(1,2,2)
-            surf(X, Y, Eta, iValues)
-            title('Imaginary Values')
-            axis equal
+%             subplot(1,2,2)
+%             surf(X, Y, Eta, iValues)
+%             title('Imaginary Values')
+%             axis equal
+%             colorbar
+        end
+        function plot_velocity(obj, direc)
+            switch direc
+                case { 'rdot'; 'raddot'; 'radialdot'}
+                    values = obj.radVel;
+                case {'tdot'; 'thetadot'}
+                    values = obj.tangVel;
+                case {'ldot'; 'longdot'; 'longitudedot'; 'zdot'}
+                    values = obj.longVel;
+            end
+            rValues = real(values);
+            iValues = imag(values);
+            [Eta, Xi] = meshgrid(obj.eta, wrapTo2Pi(obj.xi));
+            X = cos(Xi)*obj.cylProps.radius;
+            Y = sin(Xi)*obj.cylProps.radius;
+            
+%             figure
+%             subplot(1,2,1)
+            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  rValues, 'EdgeColor', 'none')
+            view(0,90);
+%             surf(X, Y, Eta, rValues, 'EdgeColor', 'none')
+            title('Real Values')
+            colormap jet
+%             axis equal
             colorbar
+%             subplot(1,2,2)
+%             surf(X, Y, Eta, iValues)
+%             title('Imaginary Values')
+%             axis equal
+%             colorbar
         end
         function plot_flat_displacement(obj, displacement)
             switch displacement
@@ -185,18 +221,18 @@ classdef CylindricalPowerFlowResultants
             end
             rValues = real(values);
             iValues = imag(values);
-            [Eta, Xi] = meshgrid(obj.eta, obj.cylinderProperties.radius*obj.xi);
-            figure
-            subplot(1,2,1)
-            surf(Xi, Eta, zeros(size(Eta)),  rValues)
+            [Eta, Xi] = meshgrid(obj.eta, obj.cylProps.radius*wrapTo2Pi(obj.xi));
+%             subplot(1,2,1)
+            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  rValues, 'EdgeColor', 'none')
             title('Real Values')
             view(0,90);
+%             colorbar
+%             subplot(1,2,2)
+%             surf(Xi, Eta, zeros(size(Eta)), iValues)
+%             title('Imaginary Values')
+%             view(0,90);
             colorbar
-            subplot(1,2,2)
-            surf(Xi, Eta, zeros(size(Eta)), iValues)
-            title('Imaginary Values')
-            view(0,90);
-            colorbar
+            colormap('jet')
         end
     end
     methods (Hidden = true)
@@ -213,13 +249,13 @@ classdef CylindricalPowerFlowResultants
             obj.K = obj.cylProps.E*obj.cylProps.thickness^3/(12*(1-obj.mu^2));
         end
         function obj = calculate_necessary_derivatives(obj)
-%             obj.long = obj.get_complex_deriv('long');
+            obj.long = obj.get_complex_deriv('long');
             obj.dlong_dz = obj.get_complex_deriv('dlong_dz');
             obj.dlong_dth = obj.get_complex_deriv('dlong_dth');
             obj.d2long_dz2 = obj.get_complex_deriv('d2long_dz2');
             obj.d2long_dth2 = obj.get_complex_deriv('d2long_dth2');
             
-%             obj.tang = obj.get_complex_deriv('tang');
+            obj.tang = obj.get_complex_deriv('tang');
             obj.dtang_dz = obj.get_complex_deriv('dtang_dz');
             obj.dtang_dth = obj.get_complex_deriv('dtang_dth');
             obj.d2tang_dz2 = obj.get_complex_deriv('d2tang_dz2');
@@ -237,6 +273,18 @@ classdef CylindricalPowerFlowResultants
             obj.d3rad_dthdz2 = obj.get_complex_deriv('d3rad_dthdz2');
             obj.d3rad_dth2dz = obj.get_complex_deriv('d3rad_dth2dz');
             obj.d3rad_dth3 = obj.get_complex_deriv('d3rad_dth3');
+            obj = obj.calculate_velocities();
+        end
+        function obj = calculate_velocities(obj)
+            lV1 = obj.splines.evaluate_at_parameters(obj.xi, obj.eta, 'vel', false, 3, [0 0]);
+            lV2 = obj.splines.evaluate_at_parameters(obj.xi, obj.eta, 'vel', true, 3, [0 0]);
+            obj.longVel = complex(lV1, lV2);
+            tV1 = obj.splines.evaluate_at_parameters(obj.xi, obj.eta, 'vel', false, 1, [0 0]);
+            tV2= obj.splines.evaluate_at_parameters(obj.xi, obj.eta, 'vel', true, 1, [0 0]);
+            obj.tangVel = complex(tV1, tV2);
+            rV1 = obj.splines.evaluate_at_parameters(obj.xi, obj.eta, 'vel', false, 2, [0 0]);
+            rV2 = obj.splines.evaluate_at_parameters(obj.xi, obj.eta, 'vel', true, 2, [0 0]);
+            obj.radVel = complex(rV1, rV2);
         end
         function complexValues = get_complex_deriv(obj, deriv)
             [measure, dimension, derivative] = obj.get_params_from_deriv(deriv);
