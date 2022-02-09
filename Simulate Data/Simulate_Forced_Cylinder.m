@@ -31,6 +31,8 @@ classdef Simulate_Forced_Cylinder< handle
         D
         PFCylProps
         useSoedel = false;
+        WtotalV
+        WtotalFV
     end
     methods
         function obj = Simulate_Forced_Cylinder(geometry, forces, material, mesh)
@@ -126,7 +128,7 @@ classdef Simulate_Forced_Cylinder< handle
                 W = zeros(length(Xs), length(Thetas), length(ts));
                 omg_F = frc.omega; % get frequency of force (should be same for all forces)
                 for m = 1:obj.mesh.longitude_modes
-                    % components that only depend on m-number of mode
+                    % trig terms that only depend on m-number of mode
                     sinTermVector = sin(m*pi*frc.xStar/L) * sin(m*pi*Xs/L);
                     for n = 0:obj.mesh.theta_modes-1
                         % mode contribution factor
@@ -137,11 +139,12 @@ classdef Simulate_Forced_Cylinder< handle
                         fwmn = obj.force_at_omega(frc, m, n);
                         % constants for multiplying 
                         consts = frc.magnitude/(ph*Nmn*fwmn);
-                        % terms associated with n mode number
+                        % trig terms associated with n mode number
                         cosTermVector = cos(n*(Thetas-frc.tStar));
                         % calculate amplitude
                         amplitude = (consts*sinTermVector')*cosTermVector;
-                        % calculate time vector
+                        % calculate time vector % phase is the combination
+                        % of the phase shift and the complex phase lag
                         timeVector(1,1,:) = complex(cos(omg_F*ts-phimn-frc.phase), sin(omg_F*ts-phimn-frc.phase));
                         % compute displacement over grid for all time
                         % stepsand add to total displacement
@@ -154,16 +157,19 @@ classdef Simulate_Forced_Cylinder< handle
                     obj.WtotalD = obj.WtotalD + W;
                 end
             end
+            obj.WtotalV = obj.WtotalD * 1i*obj.forces(1).omega;
         end
         function calculate_spectral_terms(obj)
             % this fuction calculates the FFT of the diplacement field to
             % get the complex values for displacement
             timeDim = 3;% time is the third dimension of the data
             fullFFT = 1/(size(obj.WtotalD,3))*fft(obj.WtotalD, [], timeDim); % take the FFT over time dimension
+            fullFFTVel = 1/(size(obj.WtotalV,3))*fft(obj.WtotalV, [], timeDim);
 %             obj.WtotalF = zeros(size(fullFFT(:,:,1)));
             %identify max location
             [~, indx] = max(squeeze(fullFFT(2,2,:))); %% first row  is simply supported so it will always be zero
             obj.WtotalF = fullFFT(:,:,indx);
+            obj.WtotalFV = fullFFTVel(:,:,indx);
             %check accuracy of FFT
 %             plot(obj.time, real(squeeze(obj.WtotalD(m,n,:))), 'k', obj.time, abs(obj.WtotalF(m,n))*cos(obj.time*obj.force1.omega +angle(obj.WtotalF(m,n))),'--r')
         end
@@ -236,7 +242,6 @@ classdef Simulate_Forced_Cylinder< handle
                 Nk = (AoCmn^2 + BoCmn^2 + 1) * L*a*pi/2;
             end            
         end
-        
         function calculate_rectangular_data(obj)
             % converts the displacement from the cylindrical coordinate
             % system it is calculated in to the cartesian coordinate system
@@ -250,6 +255,8 @@ classdef Simulate_Forced_Cylinder< handle
             tdata.myY = reshape(ycoord,numel(ycoord), 1);
             tdata.myZ = reshape(zcoord,numel(zcoord), 1);
             radialDisplacement = reshape(obj.WtotalF, numel(obj.WtotalF), 1);
+%             radialV = 1i*obj.forces(1).omega * radialDisplacement;
+            radialVelocity = reshape(obj.WtotalFV, numel(obj.WtotalFV), 1);
             dispX = radialDisplacement.*xtrans;
             scaling = 1; 
             %scaling = 1000; % disp in mm
@@ -258,10 +265,10 @@ classdef Simulate_Forced_Cylinder< handle
             dispY = radialDisplacement.*ytrans;
             tdata.rY = real(dispY)*scaling;
             tdata.iY = imag(dispY)*scaling;
-            velX = 1i*obj.forces(1).omega*dispX;
+            velX = radialVelocity.*xtrans;
             tdata.rXv = real(velX)*scaling;
             tdata.iXv = imag(velX)*scaling;
-            velY = 1i*obj.forces(1).omega*dispY;
+            velY = radialVelocity.*ytrans;
             tdata.rYv = real(velY)*scaling;
             tdata.iYv = imag(velY)*scaling;
             tdata.rZ = 0*tdata.rY;
@@ -397,8 +404,8 @@ classdef Simulate_Forced_Cylinder< handle
         end
         function create_default_at_frequency(obj, frequency)
             obj.geometry = cylinderGeometry();
-            obj.forces(1) = sinusoidalForce( [.025, 0*pi/180], 10, frequency, 0);
-            obj.forces(2) = sinusoidalForce( [.135, 180*pi/180], 10, frequency, 179*pi/180);
+            obj.forces(1) = sinusoidalForce( [.025, 90*pi/180], -10, frequency, 0);
+            obj.forces(2) = sinusoidalForce( [.135, 270*pi/180], -10, frequency, 179*pi/180);
             obj.material = simMaterial();
             obj.mesh = meshDetails();
             obj.timesteps = 20;
@@ -462,7 +469,7 @@ classdef Simulate_Forced_Cylinder< handle
             fprintf(fid, strcat("Index\tX\tY\tZ\tReal X [", unit,"]\tReal Y [", unit,"]\tReal Z [", unit,"]\tImaginary X [", unit,"]\t Imaginary Y [", unit,"]\tImaginary Z [", unit,"]\n"));
         end
         function write_data(fid, data, type)
-            dataFormat = strcat('%d',repmat('\t%0.8f', 1, 9), '\n');
+            dataFormat = strcat('%d',repmat('\t%0.8g', 1, 9), '\n');
             X = data.myX;  Y = data.myY;   Z = data.myZ;
             switch type
                 case 'vel'
