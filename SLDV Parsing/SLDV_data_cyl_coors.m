@@ -23,8 +23,8 @@ classdef SLDV_data_cyl_coors< SLDV_data
             obj.flat_plot('vel', 2, imaginary);
         end
         function [params, data, types] = get_cylindrical_spline_fitting_data(obj)
-            params = obj.coordinates(:,1:2:3);
-            params(:,2) = params(:,2)-min(params(:,2)); % ensure that the min height is zero
+            params = obj.coordinates(:, [1, 3]); % get the theta and longitudinal coordinate
+            params(:,2) = params(:,2)-min(params(:,2)); %translate so the min z value is zero
             data = obj.get_array_of_complex_displacement_and_velocity_values();
             types = {'closed', 'open'};
         end

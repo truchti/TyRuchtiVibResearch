@@ -57,7 +57,7 @@ classdef SLDV3D_FastScan_parser < handle
             % mark that the data has been parsed
             obj.isParsed = true;            
         end
-        function SLDVdata = export_data(obj)
+        function [SLDVdata] = export_data(obj)
             % export the condensed matlab data structure of the data
             if isempty(obj.SLDVdata)
                 obj.create_SLDV_data_structure

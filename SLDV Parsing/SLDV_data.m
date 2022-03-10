@@ -51,6 +51,13 @@ classdef SLDV_data
             [U,V,W] = obj.separate_velocities(imaginary);
             quiver3(X,Y,Z,U,V,W)
         end
+        function [params, data, types] = get_flat_spline_fitting_data(obj)
+            params = obj.coordinates(:, 1:2); %get x an y coordinates to use as parameters
+            params(:,1) = params(:,1)- min(params(:,1));
+            params(:,2) = params(:,2)- min(params(:,2));
+            data = obj.get_array_of_complex_displacement_and_velocity_values;
+            types = {'open', 'open'};
+        end
         function identify_outliers_visually(obj)
             obj.plot_coordinates;
             view(0,0)
