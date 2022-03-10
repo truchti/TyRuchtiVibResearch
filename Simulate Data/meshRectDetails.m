@@ -6,14 +6,14 @@ classdef meshRectDetails
         width_divisions
     end
     methods
-        function obj = meshRectDetails(modesL, modesT, divsL, divsT)
+        function obj = meshRectDetails(modesW, modesH, divsW, divsH)
             if nargin < 1
                 obj = obj.create_default();
             else
-                obj.height_modes = modesL;
-                obj.width_modes = modesT;
-                obj.height_divisions = divsL;
-                obj.width_divisions= divsT;
+                obj.height_modes = modesH;
+                obj.width_modes = modesW;
+                obj.height_divisions = divsH;
+                obj.width_divisions= divsW;
             end
         end
         function obj = create_default(obj)

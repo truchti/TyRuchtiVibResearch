@@ -19,18 +19,69 @@ classdef forced_plate_simulator < handle
         SpikeN
     end
     properties (Hidden = true)
-        timesteps
+        timesteps = 20
         nOmega= [];
         complexDampingPhase = [];
         WtotalD
         WtotalF
         data
         saveFolder
+        dWdx
+        dWdy
+        dWdx2
+        dWdxy
+        dWdy2
+        dWdx3
+        dWdx2y
+        dWdxy2
+        dWdy3
+        Oxdot
+        Oydot
     end
     methods
-        function in_testing(obj)
-            obj.calculate_mode_frequencies_and_phases
-            obj.calculate_2_force_displacement
+        function show_full_analytical_power_flow(obj)
+            [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
+            [wdotS, OxdotS, OydotS] = obj.conjugate_velocities();
+            qx = 1/2*real(Qx.*wdotS + Mx.*OydotS - Mxy.*OxdotS);
+            qy = 1/2*real(Qy.*wdotS - My.*OxdotS + Mxy.*OydotS);
+            [W, H] =meshgrid(obj.widths, obj.heights);
+            quiver(W,H, qx, qy);
+            
+        end
+        function show_velocity(obj, type)
+            [wd, Odx, Ody] = obj.conjugate_velocities();
+            switch type
+                case 'wdot'
+                    value = wd;
+                case 'Oxdot'
+                    value = Odx;
+                case 'Oydot'
+                    value = Ody;
+            end
+            surf(obj.widths, obj.heights, zeros*real(value), real(value))
+            view(0,90)
+            colorbar
+            colormap jet
+        end
+        function show_resultant(obj, type)
+            [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
+            switch type
+                case 'Mx'
+                    value = Mx;
+                case 'My'
+                    value = My;
+                case 'Mxy' 
+                    value = Mxy;
+                case 'Qx'
+                    value = Qx;
+                case 'Qy'
+                    value = Qy;
+            end
+            surf(obj.widths, obj.heights, zeros*real(value), real(value))
+            view(0,90)
+            colorbar
+            colormap jet
+            
         end
         function obj = forced_plate_simulator(geometryOrFreq, forces, material, mesh)
             if nargin < 1
@@ -80,7 +131,7 @@ classdef forced_plate_simulator < handle
         end
         function simulate_data(obj)
             obj.calculate_mode_frequencies_and_phases();
-            obj.calculate_2_force_displacement();
+            obj.calculate_displacement();
             obj.calculate_spectral_terms();
             obj.collectData();
         end
@@ -108,30 +159,87 @@ classdef forced_plate_simulator < handle
                     obj.force2.enabled = true;
             end
         end
+        function props = export_plate_power_flow_properties(obj)
+            props = Plate_Properties(obj.geometry.width, obj.geometry.height, obj.geometry.thickness, obj.material.E, obj.material.poisson);
+        end
     end
     methods (Access = private)
+        function calculate_displacement(obj)
+            if obj.force2.enabled
+                obj.calculate_2_force_displacement;
+            else
+                obj.calculate_1_force_displacement;
+            end
+        end
+        function calculate_1_force_displacement(obj)
+            %precalculate values that will be used a lot
+            W1 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            Phi1 = obj.complexDampingPhase + obj.force1.phase;
+            timeV = obj.time;
+            F1W = obj.force1.omega;
+            Widths = obj.widths;
+            Height = obj.heights;
+            pix1_a = pi*obj.force1.location(1)/obj.geometry.width;
+            piy1_b = pi*obj.force1.location(2)/obj.geometry.height;
+            Cf1 = 4*obj.force1.magnitude/(pi^2*obj.material.density*obj.geometry.thickness);
+            % loops over M modes along width
+            for M = 1:obj.mesh.width_modes
+                sinX1 = sin(M*pix1_a);
+                sinWidths = (sin(M*pi*Widths/obj.geometry.width))';
+                Cf1_m = Cf1/M;
+                % loops over N modes along height
+                for N = 1:obj.mesh.height_modes
+                    Cf1_mn = Cf1_m/N;
+                    sinY1 = sin(N*piy1_b);
+                    sinHeights = sin(N*pi*Height/obj.geometry.height);
+                    denom = obj.calculate_denominator(M,N);
+                    complexDampCoeff = obj.calculate_complex_damping_coefficient(M,N);
+                    allScalars1 = Cf1_mn*sinX1*sinY1/denom;
+                    gridEvals = (sinWidths*sinHeights)*complexDampCoeff;
+                    amp1 = allScalars1*gridEvals;  % because sinMxj is column and cosNtk is row straight multiplying give us complete matrix that is X by Theta
+                    times1(1,1,:) = (cos(timeV*F1W-Phi1(M,N))-1i*sin(timeV*F1W-Phi1(M,N)));% create time vector with phase shift as a 1 by 1 by t vector
+                    W1 = W1 + amp1.*times1; %because the first two dims of times are 1 the .* causes the entire matrix amp to be multiplied and by each value of times and gives an M by N by t array
+                end
+            end
+            obj.WtotalD = W1;
+        end
         function calculate_2_force_displacement(obj)
             %precalculate values that will be used a lot
             W1 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
             W2 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
-            Phi1 = obj.complexDampingPhase + obj.force1.phase;
+            dwx = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwy = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwx2 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwxy = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwy2 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwx3 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwx2y = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwxy2 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            dwy3 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            Odotx = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            Odoty = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            Phi1 = obj.complexDampingPhase + obj.force1.phase; % combine complex phase lag and phase shift
             Phi2 = obj.complexDampingPhase + obj.force2.phase;
             timeV = obj.time;
             F1W = obj.force1.omega;
             F2W = obj.force2.omega;
             Widths = obj.widths;
             Height = obj.heights;
-            pix1_a = pi*obj.force1.location(1)/obj.geometry.height;
-            piy1_b = pi*obj.force1.location(2)/obj.geometry.width;
-            pix2_a = pi*obj.force2.location(1)/obj.geometry.height;
-            piy2_b = pi*obj.force2.location(2)/obj.geometry.width;
-            Cf1 = 4*obj.force1.magnitude/(pi^2*obj.material.density*obj.geometry.height);
-            Cf2 = 4*obj.force2.magnitude/(pi^2*obj.material.density*obj.geometry.height);
+            pix1_a = pi*obj.force1.location(1)/obj.geometry.width;
+            piy1_b = pi*obj.force1.location(2)/obj.geometry.height;
+            pix2_a = pi*obj.force2.location(1)/obj.geometry.width;
+            piy2_b = pi*obj.force2.location(2)/obj.geometry.height;
+            Cf1 = 4*obj.force1.magnitude/(pi^2*obj.material.density*obj.geometry.thickness);
+            Cf2 = 4*obj.force2.magnitude/(pi^2*obj.material.density*obj.geometry.thickness);
+            
             % loops over M modes along width
             for M = 1:obj.mesh.width_modes
                 sinX1 = sin(M*pix1_a);
                 sinX2 = sin(M*pix2_a);
                 sinWidths = (sin(M*pi*Widths/obj.geometry.width))';
+                dWx = (M*pi/obj.geometry.width)*(cos(M*pi*Widths/obj.geometry.width))';
+                dWx2 = -(M*pi/obj.geometry.width)^2*(sin(M*pi*Widths/obj.geometry.width))';
+                dWx3 = -(M*pi/obj.geometry.width)^3*(cos(M*pi*Widths/obj.geometry.width))';
                 Cf1_m = Cf1/M;
                 Cf2_m = Cf2/M;
                 % loops over N modes along height
@@ -141,6 +249,9 @@ classdef forced_plate_simulator < handle
                     sinY1 = sin(N*piy1_b);
                     sinY2 = sin(N*piy2_b);
                     sinHeights = sin(N*pi*Height/obj.geometry.height);
+                    dWy = (N*pi/obj.geometry.height) * cos(N*pi*Height/obj.geometry.height);
+                    dWy2 = -(N*pi/obj.geometry.height)^2 * sin(N*pi*Height/obj.geometry.height);
+                    dWy3 = -(N*pi/obj.geometry.height)^3 * cos(N*pi*Height/obj.geometry.height);
                     denom = obj.calculate_denominator(M,N);
                     complexDampCoeff = obj.calculate_complex_damping_coefficient(M,N);
                     allScalars1 = Cf1_mn*sinX1*sinY1/denom;
@@ -148,22 +259,88 @@ classdef forced_plate_simulator < handle
                     gridEvals = (sinWidths*sinHeights)*complexDampCoeff;
                     amp1 = allScalars1*gridEvals;  % because sinMxj is column and cosNtk is row straight multiplying give us complete matrix that is X by Theta
                     amp2 = allScalars2*gridEvals;
+                    K1 = allScalars1*complexDampCoeff;
+                    K2 = allScalars2*complexDampCoeff;
+                    dxamp1 = K1*(dWx*sinHeights);
+                    dxamp2 = K2*(dWx*sinHeights);
+                    dyamp1 = K1 * (sinWidths*dWy);
+                    dyamp2 = K2 * (sinWidths*dWy);
+                    dx2amp1 = K1 *(dWx2*sinHeights);
+                    dx2amp2 = K2 *(dWx2*sinHeights);
+                    dxyamp1 = K1 *(dWx*dWy);
+                    dxyamp2 = K2 *(dWx*dWy);
+                    dy2amp1 = K1 *(sinWidths*dWy2);
+                    dy2amp2 = K2* (sinWidths*dWy2) ;
+                    dx3amp1 = K1 *(dWx3*sinHeights);
+                    dx3amp2 = K2 *(dWx3*sinHeights);
+                    dx2yamp1 = K1 *(dWx2*dWy);
+                    dx2yamp2 = K2 *(dWx2*dWy);
+                    dxy2amp1 = K1 *(dWx*dWy2);
+                    dxy2amp2 = K2 *(dWx*dWy2); 
+                    dy3amp1 = K1 *(sinWidths*dWy3);
+                    dy3amp2 = K2 *(sinWidths*dWy3);
                     times1(1,1,:) = (cos(timeV*F1W-Phi1(M,N))-1i*sin(timeV*F1W-Phi1(M,N)));% create time vector with phase shift as a 1 by 1 by t vector
                     times2(1,1,:) = (cos(timeV*F2W-Phi2(M,N))-1i*sin(timeV*F2W-Phi2(M,N)));
+                    dtimes1(1,1,:) = 1i*F1W*(cos(timeV*F1W-Phi1(M,N))-1i*sin(timeV*F1W-Phi1(M,N)));
+                    dtimes2(1,1,:) = 1i*F2W*(cos(timeV*F2W-Phi1(M,N))-1i*sin(timeV*F1W-Phi1(M,N)));
                     W1 = W1 + amp1.*times1; %because the first two dims of times are 1 the .* causes the entire matrix amp to be multiplied and by each value of times and gives an M by N by t array
                     W2 = W2 + amp2.*times2;
+                    dwx = dwx + dxamp1.*times1 + dxamp2.*times2;
+                    dwy = dwy + dyamp1.*times1 + dyamp2.*times2;
+                    dwx2 = dwx2 + dx2amp1.*times1 + dx2amp2.*times2;
+                    dwxy = dwxy + dxyamp1.*times1 + dxyamp2.*times2;
+                    dwy2 = dwy2 + dy2amp1.*times1 + dy2amp2.*times2;
+                    dwx3 = dwx3 + dx3amp1.*times1 + dx3amp2.*times2;
+                    dwx2y = dwx2y + dx2yamp1.*times1 + dx2yamp2.*times2;
+                    dwxy2 = dwxy2 + dxy2amp1.*times1 + dxy2amp2.*times2;
+                    dwy3 = dwy3 + dy3amp1.*times1 + dy3amp2.*times2;
+                    Odotx = Odotx + dyamp1.*dtimes1 + dyamp2.*dtimes2;
+                    Odoty = Odoty + dxamp1.*dtimes1 + dyamp2.*dtimes2;
                 end
             end
             obj.WtotalD = W1+W2;
+            obj.dWdx = dwx;
+            obj.dWdy = dwy;
+            obj.dWdx2 = dwx2;
+            obj.dWdxy = dwxy;
+            obj.dWdy2 = dwy2;
+            obj.dWdx3 = dwx3;
+            obj.dWdx2y = dwx2y;
+            obj.dWdxy2 = dwxy2;
+            obj.dWdy3 = dwy3;
+            obj.Oxdot = Odotx;
+            obj.Oydot = Odoty;
         end
         function calculate_spectral_terms(obj)
             timeDim = 3;% time is the third dimension of the data
             fullFFT = 1/(size(obj.WtotalD,3))*fft(obj.WtotalD, [], timeDim); % take the FFT over time dimension
-            obj.WtotalF = zeros(size(fullFFT(:,:,1)));
+            dxFFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdx, [], timeDim);
+            dyFFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdy, [], timeDim);
+            dx2FFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdx2, [], timeDim);
+            dxyFFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdxy, [], timeDim);
+            dy2FFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdy2, [], timeDim);
+            dx3FFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdx3, [], timeDim);
+            dx2yFFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdx2y, [], timeDim);
+            dxy2FFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdxy2, [], timeDim);
+            dy3FFT = 1/(size(obj.WtotalD,3))*fft(obj.dWdy3, [], timeDim);
+            OxFFT = 1/(size(obj.WtotalD,3))*fft(obj.Oxdot , [], timeDim);
+            OyFFT = 1/(size(obj.WtotalD,3))*fft(obj.Oydot, [], timeDim);
+%             obj.WtotalF = zeros(size(fullFFT(:,:,1)));
             %identify max location avoid edges because they are supported
             %and have no displacement
             [~, indx] = max(squeeze(fullFFT(2,2,:)));
             obj.WtotalF = fullFFT(:,:,indx);
+            obj.dWdx = dxFFT(:,:,indx);
+            obj.dWdy = dyFFT(:,:,indx);
+            obj.dWdx2 = dx2FFT(:,:,indx);
+            obj.dWdxy = dxyFFT(:,:,indx);
+            obj.dWdy2 = dy2FFT(:,:,indx);
+            obj.dWdx3 = dx3FFT(:,:,indx);
+            obj.dWdx2y = dx2yFFT(:,:,indx);
+            obj.dWdxy2 = dxy2FFT(:,:,indx);
+            obj.dWdy3 = dy3FFT(:,:,indx);
+            obj.Oxdot= OxFFT(:,:,indx);
+            obj.Oydot = OyFFT(:,:,indx);
         end
         function write_velocity_file(obj)
             obj.write_file('vel')
@@ -228,12 +405,12 @@ classdef forced_plate_simulator < handle
             tempData.yCoor =reshape(H, numel(H), 1);
             tempData.zCoor = ones(size(tempData.yCoor));
             % no displacement in X or Y
-            tempData.rX = zeros(size(tempData.yCoor));
-            tempData.iX = zeros(size(tempData.yCoor));
+            tempData.rX = zeros(size(tempData.xCoor));
+            tempData.iX = zeros(size(tempData.xCoor));
             tempData.rY = zeros(size(tempData.yCoor));
             tempData.iY = zeros(size(tempData.yCoor));
-            tempData.rXv = zeros(size(tempData.yCoor));
-            tempData.iXv = zeros(size(tempData.yCoor));
+            tempData.rXv = zeros(size(tempData.xCoor));
+            tempData.iXv = zeros(size(tempData.xCoor));
             tempData.rYv = zeros(size(tempData.yCoor));
             tempData.iYv = zeros(size(tempData.yCoor));
             %
@@ -244,6 +421,19 @@ classdef forced_plate_simulator < handle
             tempData.rZv = real(fullVel);
             tempData.iZv = imag(fullVel);
             obj.data = tempData;            
+        end
+        function [Mx, My, Mxy, Qx, Qy]= calculate_moments_and_shears(obj)
+            nu = obj.material.poisson;
+            Mx = -obj.D * (obj.dWdx2 + nu*obj.dWdy2);  
+            My = -obj.D * (obj.dWdy2 + nu*obj.dWdx2);
+            Mxy = -obj.D * (1-nu) * obj.dWdxy;
+            Qy = -obj.D * (obj.dWdx3 + obj.dWdxy2);
+            Qx = -obj.D * (obj.dWdx2y + obj.dWdy3);
+        end
+        function [wdotS, OxdotS, OydotS] = conjugate_velocities(obj)
+            wdotS =  conj(1i*obj.force1.omega*obj.WtotalF);
+            OxdotS = conj(obj.Oxdot);
+            OydotS = conj(obj.Oydot); 
         end
     end
     methods % getters
@@ -293,7 +483,7 @@ classdef forced_plate_simulator < handle
             fprintf(fid, strcat("Index\tX\tY\tZ\tReal X [", unit,"]\tReal Y [", unit,"]\tReal Z [", unit,"]\tImaginary X [", unit,"]\t Imaginary Y [", unit,"]\tImaginary Z [", unit,"]\n"));
         end
         function write_data(fid, data, type)
-            dataFormat = strcat('%d',repmat('\t%0.8f', 1, 9), '\n');
+            dataFormat = strcat('%d',repmat('\t%g', 1, 9), '\n');
             X = data.xCoor;  Y = data.yCoor;   Z = data.zCoor;
             switch type
                 case 'vel'
