@@ -42,7 +42,7 @@ classdef quinticSplineSurfacePlotter < handle
             end
             splineValues = obj.evaluate_spline_at_plotting_points(type, isImaginary, dimension, derivative); 
             surf(obj.plottingPoints_xi, obj.plottingPoints_eta, splineValues')
-            xlabel('\theta');
+            xlabel('Width');
             ylabel('Height');
             zlabel('Value');
         end

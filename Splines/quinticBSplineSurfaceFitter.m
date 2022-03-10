@@ -35,7 +35,7 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
             %evaluate basis functions
             [xiB, etaB] = obj.splineEvaluator.evaluate_basis_functions(obj.xiParams, obj.etaParams);
             for i = size(obj.data,2):-1:1
-                    obj.splineEvaluator.controlPoints(:,:,i) = numel(obj.data(:,i))*(xiB\diag(obj.data(:,i))/(etaB'));
+                obj.splineEvaluator.controlPoints(:,:,i) = numel(obj.data(:,i))*(xiB\diag(obj.data(:,i))/(etaB'));
             end
             obj.solved = true;
         end  
@@ -49,7 +49,7 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
             xi = linspace(0, max(obj.xiKnot), 100);
             eta = linspace(0, max(obj.etaKnot), 50);
             [ETA, XI] = meshgrid(eta, xi);
-            for n = 1:12
+            for n = 1:size(obj.data,2)
                 figure(n)
                 values = obj.splineEvaluator.evaluate_spline_number_at_parameters( xi, eta, n);
                 scatter3(obj.xiParams, obj.etaParams, obj.data(:,n))
@@ -61,14 +61,14 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
     end
     methods (Hidden = true)
         function calculate_knot_vectors(obj)
-            obj.xiKnot = obj.calculate_knot_vector_using_type(obj.controlNetDimensions(1), obj.types{1}, max(obj.xiParams));
-            obj.etaKnot = obj.calculate_knot_vector_using_type(obj.controlNetDimensions(2), obj.types{2}, max(obj.etaParams));
+            obj.xiKnot = obj.calculate_knot_vector_using_type(obj.controlNetDimensions(1), obj.types{1}, min(obj.xiParams), max(obj.xiParams));
+            obj.etaKnot = obj.calculate_knot_vector_using_type(obj.controlNetDimensions(2), obj.types{2}, min(obj.etaParams), max(obj.etaParams));
         end
-        function knotVect = calculate_knot_vector_using_type(obj, numPts, type, maxScale)
+        function knotVect = calculate_knot_vector_using_type(obj, numPts, type, minScale, maxScale)
             if strcmp(type, 'open')
-                knotVect = obj.open_loop_knot_vector(numPts, maxScale);
+                knotVect = obj.open_loop_knot_vector(numPts, minScale, maxScale);
             elseif strcmp(type, 'closed')
-                knotVect = obj.closed_loop_knot_vector(numPts,maxScale);
+                knotVect = obj.closed_loop_knot_vector(numPts, minScale, maxScale);
             else
                 warning("Invalid Type");
                 knotVect = Nan;
@@ -76,16 +76,14 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
         end
     end
     methods (Static = true, Hidden = true)
-        function knotVector = closed_loop_knot_vector(npts, units)
+        function knotVector = closed_loop_knot_vector(npts, minVal, maxVal)
+%             assert(minVal < 1);
             knotVector = (0:6+npts-1)-5;
-            if nargin > 1 && units
-                knotVector = knotVector./(knotVector(end))* units;
+            if nargin > 1 && maxVal
+                knotVector = knotVector./(knotVector(end))* maxVal;
             end
         end
-        function knotVector = open_loop_knot_vector(numPts, unit)
-            if nargin < 2
-                unit = 0;
-            end
+        function knotVector = open_loop_knot_vector(numPts, minVal, maxVal)
             npc = numPts+ 6;
             np2 = numPts+2;
             knotVector = zeros(1,npc);
@@ -96,8 +94,10 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
                     knotVector(i) = knotVector(i-1);
                 end
             end
-            if unit
-                knotVector = knotVector./max(knotVector)*unit;
+            if minVal < 0
+                knotVector = (knotVector - max(knotVector))./max(knotVector)*abs(minVal);
+            else
+                knotVector = knotVector./max(knotVector)*maxVal;
             end
         end
     end
