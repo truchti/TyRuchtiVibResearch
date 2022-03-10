@@ -109,7 +109,7 @@ classdef CylindricalPowerFlowResultants
             surf(Xi, Eta, iValues)
             title('Imaginary Values')
         end
-        function plot_displacement(obj, displacement)
+        function plot_displacement(obj, displacement, isReal)
             switch displacement
                 case { 'r'; 'rad'; 'radial'}
                     values = obj.rad;
@@ -118,28 +118,21 @@ classdef CylindricalPowerFlowResultants
                 case {'l'; 'long'; 'longitude'; 'z'}
                     values = obj.long;
             end
-            rValues = real(values);
-            iValues = imag(values);
+            if isReal
+                Values = real(values);
+                titleString = 'Real Values';
+            else
+                Values = imag(values);
+                titleString = 'Imag Values';
+            end
             [Eta, Xi] = meshgrid(obj.eta, wrapTo2Pi(obj.xi));
-            X = cos(Xi)*obj.cylProps.radius;
-            Y = sin(Xi)*obj.cylProps.radius;
-            
-%             figure
-%             subplot(1,2,1)
-            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  iValues, 'EdgeColor', 'none')
+            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  Values, 'EdgeColor', 'none')
             view(0,90);
             colormap jet
-%             surf(X, Y, Eta, rValues)
-            title('Real Values')
-%             axis equal
+            title(titleString)
             colorbar
-%             subplot(1,2,2)
-%             surf(X, Y, Eta, iValues)
-%             title('Imaginary Values')
-%             axis equal
-%             colorbar
         end
-        function plot_velocity(obj, direc)
+        function plot_velocity(obj, direc, isReal)
             switch direc
                 case { 'rdot'; 'raddot'; 'radialdot'}
                     values = obj.radVel;
@@ -148,26 +141,19 @@ classdef CylindricalPowerFlowResultants
                 case {'ldot'; 'longdot'; 'longitudedot'; 'zdot'}
                     values = obj.longVel;
             end
-            rValues = real(values);
-            iValues = imag(values);
+            if isReal
+                Values = real(values);
+                titleString = 'Real Values';
+            else
+                Values = imag(values);
+                titleString = 'Imag Values';
+            end
             [Eta, Xi] = meshgrid(obj.eta, wrapTo2Pi(obj.xi));
-            X = cos(Xi)*obj.cylProps.radius;
-            Y = sin(Xi)*obj.cylProps.radius;
-            
-%             figure
-%             subplot(1,2,1)
-            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  rValues, 'EdgeColor', 'none')
+            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)), Values, 'EdgeColor', 'none')
             view(0,90);
-%             surf(X, Y, Eta, rValues, 'EdgeColor', 'none')
-            title('Real Values')
+            title(titleString)
             colormap jet
-%             axis equal
             colorbar
-%             subplot(1,2,2)
-%             surf(X, Y, Eta, iValues)
-%             title('Imaginary Values')
-%             axis equal
-%             colorbar
         end
         function plot_flat_displacement(obj, displacement)
             switch displacement
@@ -196,7 +182,10 @@ classdef CylindricalPowerFlowResultants
             view(0,90);
             colorbar
         end
-        function plot_resultant(obj, resultant)
+        function plot_resultant(obj, resultant, isReal)
+            if nargin<3
+                isReal = true;
+            end
             switch resultant
                 case 'Nt'
                     [values, ~, ~, ~] = obj.calculate_normal_resultants();
@@ -219,18 +208,17 @@ classdef CylindricalPowerFlowResultants
                 case 'Ql'
                     [~, values] = obj.calculate_shear_resultantss();
             end
-            rValues = real(values);
-            iValues = imag(values);
-            [Eta, Xi] = meshgrid(obj.eta, obj.cylProps.radius*wrapTo2Pi(obj.xi));
-%             subplot(1,2,1)
-            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  rValues, 'EdgeColor', 'none')
-            title('Real Values')
+            if isReal
+                Values = real(values);
+                titleString = 'Real Values';
+            else
+                Values = imag(values);
+                titleString = 'Imag Values';
+            end
+            [Eta, Xi] = meshgrid(obj.eta, wrapTo2Pi(obj.xi));
+            surf(obj.cylProps.radius*Xi, Eta, zeros(size(Eta)),  Values, 'EdgeColor', 'none')
+            title(titleString)
             view(0,90);
-%             colorbar
-%             subplot(1,2,2)
-%             surf(Xi, Eta, zeros(size(Eta)), iValues)
-%             title('Imaginary Values')
-%             view(0,90);
             colorbar
             colormap('jet')
         end

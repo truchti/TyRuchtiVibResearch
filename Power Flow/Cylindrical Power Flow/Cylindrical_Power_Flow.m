@@ -39,7 +39,6 @@ classdef Cylindrical_Power_Flow <handle
         PowerFlowResultants
         % provides plotting functionallity for the power flow data
         PFPlotter
-        
         dirty = true;
         iqtheta
         iqlong
@@ -89,15 +88,17 @@ classdef Cylindrical_Power_Flow <handle
             obj.create_power_flow_plotter();
         end
         %% plotting functions
-        function plot_component(obj, component)
-            
+        function plot_component(obj, component, isReal)
+            if nargin < 3
+                isReal = true;
+            end
             switch component
                 case {'t'; 'theta'; 'r'; 'rad'; 'l'; 'long'}
-                    obj.PowerFlowResultants.plot_displacement(component);
+                    obj.PowerFlowResultants.plot_displacement(component, isReal);
                 case {'Nt'; 'Nl'; 'Ntl'; 'Nlt'; 'Mt'; 'Ml'; 'Mtl'; 'Mlt'; 'Qt'; 'Ql'}
-                    obj.PowerFlowResultants.plot_resultant(component)
+                    obj.PowerFlowResultants.plot_resultant(component, isReal)
                 case {'tdot'; 'thetadot'; 'rdot'; 'raddot'; 'ldot'; 'longdot'}
-                    obj.PowerFlowResultants.plot_velocity(component);
+                    obj.PowerFlowResultants.plot_velocity(component, isReal);
                 otherwise
                     warning('Input not valid')
             end            
@@ -190,6 +191,24 @@ classdef Cylindrical_Power_Flow <handle
 %             derivative = [0 0];
 %             values = obj.fieldEvaluator.evaluate_at_parameters(obj.xi, obj.eta, type, isImaginary, dimension, derivative);
             obj.PFPlotter.plot_flat
+        end
+        function plot_radial_derivative(obj, deriv, isReal)
+            if isReal
+                splineNumber = 2; % real radial displacement spline
+            else
+                splineNumber = 5; % imag radial displacement spline
+            end
+            if strcmp(deriv, 'rdot')
+                splineNumber = splineNumber +1;
+            end
+            derivative = obj.derivativeNumberfromText(deriv);
+            values = obj.fieldEvaluator.evaluate_spline_number_at_parameters(obj.xi, obj.eta, splineNumber, derivative);
+            
+            [L, T] = meshgrid(obj.eta, obj.cylinderProperties.radius*obj.xi);
+            surf(T, L, zeros(size(values)), values, 'EdgeAlpha', 0);            
+            colorbar
+            colormap jet
+            view(0,90)
         end
         function probe_derivatives(obj, order)
             type = 'disp';
@@ -336,6 +355,7 @@ classdef Cylindrical_Power_Flow <handle
             obj.splineFitter.fit_spline_surfaces();
 %             obj.splineFitter.check_by_viewing_spline_and_data();
         end
+        
         % create other objects
         function create_resultant_calculator(obj)
             obj.PowerFlowResultants = CylindricalPowerFlowResultants(obj.fieldEvaluator, obj.cylinderProperties, obj.xi, obj.eta);
@@ -349,6 +369,34 @@ classdef Cylindrical_Power_Flow <handle
         function  set_up_surface_and_derivative_evaluators(obj)
             obj.fieldEvaluator = obj.splineFitter.output_solved_spline_evaluator();
             obj.calculate_xi_and_eta();
+        end
+    end
+    methods (Static = true)
+        function value = derivativeNumberfromText(txt)
+            switch txt
+                case {'dx'}
+                    value = [0 1];
+                case {'d0'}
+                    value = [1 0];
+                case {'dx2'}
+                    value = [0 2];
+                case {'dxd0'}
+                    value = [1 1];
+                case {'d02'}
+                    value = [2 0];
+                case {'dx3'}
+                    value = [0 3];
+                case {'dx2d0'}
+                    value = [1 2];
+                case {'dxd02'}
+                    value = [2 1];
+                case {'d03'}
+                    value = [3 0];
+                case {'rdot'}
+                    value = [0 0];
+                otherwise
+                    value = [0 0];
+            end
         end
     end
 end
