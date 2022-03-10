@@ -2,6 +2,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
     properties
         elements
         nodes
+        splineSegmentNumbers = [15,15]
     end
     properties (Hidden = true)
         extrapolatedToNodes = false;
@@ -27,7 +28,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         TNxy
         TQ
         nodeIndxMap
-        thetaShift
+        thetaShift = 0
     end
     methods
         function obj = ANSYS_181Shell_Cylindrical_Mesh(nodes, elements, nodeResultTypes, IndxMap)
@@ -64,7 +65,10 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             axis equal
             colorbar
         end
-        function plot_flat_nodal_result(obj,type)
+        function plot_flat_nodal_result(obj,type, isReal)
+            if nargin < 3 
+                isReal = true;
+            end
             for e = 1:length(obj.elements)
                 [Xs, Ys, Zs] = obj.get_nodal_coordinates_from_element(e);
                 thetas = atan2(Ys,Xs);
@@ -75,10 +79,14 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
                 rads = (Xs.^2 + Ys.^2).^(1/2);
                 rad = mean(rads);
                 nodeValues = obj.get_nodal_values_for_an_element(type, e);
-                patch(Thetas*rad, Zs, -.005*ones(size(rads)), imag(nodeValues), 'EdgeColor', 'none');
+                if isReal
+                    Values = real(nodeValues);
+                else
+                    Values = imag(nodeValues);
+                end
+                patch(Thetas*rad, Zs, -.001*ones(size(rads)), Values, 'EdgeColor', 'none');
             end
             colormap(gca, jet)
-%             alpha(.9)
             axis equal
             colorbar
         end
@@ -325,14 +333,12 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
 %             drdot/dth *1/a;
             % real and imaginary for Olong then real and imag for Otheta
             data = [real(rdot)', imag(rdot)', real(rdot/rad)', imag(rdot/rad)'];
-            obj.Fitter = quinticBSplineSurfaceFitter([ths, longs], data, {"closed", "open"}, [15,15]);
+            obj.Fitter = quinticBSplineSurfaceFitter([ths, longs], data, {"closed", "open"}, obj.splineSegmentNumbers);
             obj.Fitter.fit_spline_surfaces();
             obj.DotSpline = obj.Fitter.output_solved_spline_evaluator();
             %take derivatives wrt th and long vars
             %for each node evaluate derivatives and save value
-            for n = 1:length(obj.nodes)
-                
-                                                                                   %param, param, fitting data, derive order of 1st and 2nd param
+            for n = 1:length(obj.nodes)                                                                                   %param, param, fitting data, derive order of 1st and 2nd param
                 BetaDotThetaReal= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 1, [0,1]); %e.g. dw/dl real
                 BetaDotThetaImag= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 2, [0,1]); % dw/dl imag
                 betaDTh =  complex(BetaDotThetaReal, BetaDotThetaImag);
