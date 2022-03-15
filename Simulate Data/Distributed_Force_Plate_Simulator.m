@@ -24,10 +24,10 @@ classdef Distributed_Force_Plate_Simulator < handle
         complexDampingPhase = [];
         WtotalD, WtotalF
         data
-        dWdx, dWdy
+        dWdx, dWdy, dWdt
         dWdx2, dWdxy, dWdy2
         dWdx3, dWdx2y, dWdxy2, dWdy3
-        Oxdot, Oydot
+        dWdyt, dWdxt
     end
     properties (Access = private)
         timeV, Phi
@@ -94,28 +94,56 @@ classdef Distributed_Force_Plate_Simulator < handle
             props = Plate_Properties(obj.geometry.width, obj.geometry.height, obj.geometry.thickness, obj.material.E, obj.material.poisson);
         end
         %% plotting functions
-        function show_full_analytical_power_flow(obj)
-            [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
-            [wdotS, OxdotS, OydotS] = obj.conjugate_velocities();
-            qx = 1/2*real(Qx.*wdotS + Mx.*OydotS - Mxy.*OxdotS);
-            qy = 1/2*real(Qy.*wdotS - My.*OxdotS + Mxy.*OydotS);
-            [Wid, Hei] =meshgrid(obj.widths, obj.heights);
+        function [qx, qy] = show_full_analytical_power_flow(obj)
+            nu = obj.material.poisson;
+            x1 = (obj.dWdx3 + obj.dWdxy2)   .* conj(obj.dWdt);
+            x2 = (obj.dWdx2 + nu*obj.dWdy2) .* conj(obj.dWdxt);
+            x3 = (1-nu) * obj.dWdxy         .* conj(obj.dWdyt);
+            qx = obj.D/2 * real(x1 - x2 - x3);
+            y1 = (obj.dWdy3 +obj.dWdx2y)    .* conj(obj.dWdt);
+            y2 = (obj.dWdy2 + nu*obj.dWdx2) .* conj(obj.dWdyt);
+            y3 = (1-nu) * obj.dWdxy          .* conj(obj.dWdxt);
+            qy = obj.D/2 * real(y1-y2-y3);            
+            [Wid, Hei] = ndgrid(obj.widths, obj.heights);
             quiver(Wid,Hei, qx, qy);
+            
+            [qxtest, qytest] = obj.calculate_power_flow();
+            figure()
+            quiver(Wid, Hei, qxtest, qytest);
+        end
+        function show_power_flow_part(obj, type)
+            [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
+            [wdotS, dWdytS, dWdxtS] = obj.conjugate_velocities();
+            switch type
+                case {'bending', 'b', 'bend'}
+                    qxp = Mx.*dWdxtS;
+                    qyp = My.*dWdytS;
+                case {'twisting', 't', 'twist'}
+                    qxp = Mxy.*dWdytS;
+                    qyp = Mxy.*dWdxtS;
+                case {'shear', 's'}
+                    qxp = Qx.*wdotS;
+                    qyp = Qy.*wdotS;
+            end
+            [Wid, Hei] = ndgrid(obj.widths, obj.heights);
+            quiver(Wid, Hei, qxp, qyp, 'color', [1 0 .2]);
+            title(type)
         end
         function show_velocity(obj, type)
             [wd, Odx, Ody] = obj.conjugate_velocities();
             switch type
                 case 'wdot'
                     value = wd;
-                case 'Oxdot'
+                case {'Oxdot', 'dWdyt'}
                     value = Odx;
-                case 'Oydot'
+                case {'Oydot', 'dWdxt'}
                     value = Ody;
             end
-            surf(obj.widths, obj.heights, zeros*real(value), real(value))
+            surf(obj.widths, obj.heights, zeros*real(value)', real(value)')
             view(0,90)
             colorbar
             colormap jet
+            axis equal
         end
         function show_resultant(obj, type)
             [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
@@ -198,7 +226,7 @@ classdef Distributed_Force_Plate_Simulator < handle
         end
         function calculate_spectral_terms(obj)
             timeDim = 3;% time is the third dimension of the data
-            props = {'dWdx', 'dWdy', 'dWdx2', 'dWdxy', 'dWdy2', 'dWdx3', 'dWdx2y', 'dWdxy2', 'dWdy3', 'Oxdot', 'Oydot'};
+            props = {'dWdt', 'dWdx', 'dWdy', 'dWdx2', 'dWdxy', 'dWdy2', 'dWdx3', 'dWdx2y', 'dWdxy2', 'dWdy3', 'dWdyt', 'dWdxt'};
             fullFFT = 1/(size(obj.WtotalD,3))*fft(obj.WtotalD, [], timeDim); % take the FFT over time dimension
             [~, indx] = max(squeeze(fullFFT(2,2,:)));
             obj.WtotalF = fullFFT(:,:,indx);
@@ -207,21 +235,39 @@ classdef Distributed_Force_Plate_Simulator < handle
                 obj.(props{i}) = FFT(:,:,indx);
             end
         end
+        function [qx, qy] = calculate_power_flow(obj)
+            [sx, sy] = obj.calculate_shear_power_flow();
+            [bx, by] = obj.calculate_bending_power_flow();
+            [tx, ty] = obj.calculate_twisting_power_flow();
+            qx = sx + bx + tx;
+            qy = sy + by + ty;
+        end
         %% power flow helpers
-        function [Mx, My, Mxy, Qx, Qy]= calculate_moments_and_shears(obj)
+        function [qxs, qys] = calculate_shear_power_flow(obj)
+            [Qx, Qy] = obj.calculate_shear();
+            qxs = 0.5 * real(Qx .* conj(obj.dWdt));
+            qys = 0.5 * real(Qy .* conj(obj.dWdt));
+        end
+        function [qxb, qyb] = calculate_bending_power_flow(obj)
+            [Mx, My, ~] = obj.calculate_moment();
+            qxb = -0.5 * real(Mx .* conj(obj.dWdxt));
+            qyb = -0.5 * real(My .* conj(obj.dWdyt));
+        end
+        function [qxt, qyt] = calculate_twisting_power_flow(obj)
+            [~, ~, Mxy] = obj.calculate_moment();
+            qxt = -0.5 * real(Mxy .* conj(obj.dWdyt));
+            qyt = -0.5 * real(Mxy .* conj(obj.dWdxt));
+        end        
+        function [Mx, My, Mxy] = calculate_moment(obj)
             nu = obj.material.poisson;
-            Mx = -obj.D * (obj.dWdx2 + nu*obj.dWdy2);
-            My = -obj.D * (obj.dWdy2 + nu*obj.dWdx2);
-            Mxy = -obj.D * (1-nu) * obj.dWdxy;
-            Qy = -obj.D * (obj.dWdx3 + obj.dWdxy2);
-            Qx = -obj.D * (obj.dWdx2y + obj.dWdy3);
+            Mx = obj.D * (obj.dWdx2 + nu * obj.dWdy2);
+            My = obj.D * (obj.dWdy2 + nu * obj.dWdx2);
+            Mxy = obj.D * (1-nu) * obj.dWdxy;
         end
-        function [wdotS, OxdotS, OydotS] = conjugate_velocities(obj)
-            wdotS =  conj(1i*obj.forces(1).omega*obj.WtotalF);
-            OxdotS = conj(obj.Oxdot);
-            OydotS = conj(obj.Oydot);
+        function [Qx, Qy] = calculate_shear(obj)
+            Qx = obj.D * (obj.dWdx3 + obj.dWdxy2);
+            Qy = obj.D * (obj.dWdx2y + obj.dWdy3);
         end
-        
         %% calculate f(x,y,t) helpers
         function calc_mode_disp_as_func_of_x_y_t_and_derivs(obj, M,N) 
             TS = obj.calculate_total_scalar(M,N);
@@ -229,7 +275,6 @@ classdef Distributed_Force_Plate_Simulator < handle
             obj.calcualte_time_function_and_derivative(M,N);
             obj.add_modal_contribution_of_temporal_spatial_func_deriv();
         end 
-        
         function calculate_spatial_function_and_derivatives(obj, TS)
             % because fx terms are columns and fy terms are rows vector multiplying 
             %gives a matrix that is length(fx) by length(fy)
@@ -246,7 +291,8 @@ classdef Distributed_Force_Plate_Simulator < handle
         end
         function calcualte_time_function_and_derivative(obj, M, N)
             obj.ft(1,1,:) = (cos(obj.FWt-obj.Phi(M,N))-1i*sin(obj.FWt-obj.Phi(M,N)));% create time vector with phase shift as a 1 by 1 by t vector
-            obj.dft(1,1,:) = 1i*obj.ft(1,1,:);
+            omg = obj.forces(1).omega;
+            obj.dft(1,1,:) = 1i*omg*obj.ft(1,1,:);
         end
         function add_modal_contribution_of_temporal_spatial_func_deriv(obj)
             %because the first two dims of times are 1 the .* causes the 
@@ -257,8 +303,9 @@ classdef Distributed_Force_Plate_Simulator < handle
             for i = 1:length(P1)
                 obj.(P1{i}) = obj.(P1{i})+obj.(P2{i}) .* obj.ft;
             end
-            obj.Oxdot = obj.Oxdot + obj.dfxydy .* obj.dft;
-            obj.Oydot = obj.Oydot + obj.dfxydx .* obj.dft;
+            obj.dWdt = obj.dWdt  + obj.fxy .* obj.dft;
+            obj.dWdyt = obj.dWdyt + obj.dfxydy .* obj.dft;
+            obj.dWdxt = obj.dWdxt + obj.dfxydx .* obj.dft;
         end
         
         function calculate_force_effect_m_mode(obj, num)
@@ -285,6 +332,7 @@ classdef Distributed_Force_Plate_Simulator < handle
         end
         function preallocate_zero_arrays(obj)
             obj.WtotalD = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            obj.dWdt = zeros(length(obj.widths), length(obj.heights), length(obj.time));
             obj.dWdx = zeros(length(obj.widths), length(obj.heights), length(obj.time));
             obj.dWdy = zeros(length(obj.widths), length(obj.heights), length(obj.time));
             obj.dWdx2 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
@@ -294,8 +342,8 @@ classdef Distributed_Force_Plate_Simulator < handle
             obj.dWdx2y = zeros(length(obj.widths), length(obj.heights), length(obj.time));
             obj.dWdxy2 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
             obj.dWdy3 = zeros(length(obj.widths), length(obj.heights), length(obj.time));
-            obj.Oxdot = zeros(length(obj.widths), length(obj.heights), length(obj.time));
-            obj.Oydot = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            obj.dWdyt = zeros(length(obj.widths), length(obj.heights), length(obj.time));
+            obj.dWdxt = zeros(length(obj.widths), length(obj.heights), length(obj.time));
         end
         function preCalculate_oft_used_terms(obj) %% check for height and width mesh
             obj.timeV = obj.time;

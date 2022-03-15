@@ -26,19 +26,64 @@ classdef forced_plate_simulator < handle
         WtotalF
         data
         saveFolder
-        dWdx
-        dWdy
-        dWdx2
-        dWdxy
-        dWdy2
-        dWdx3
-        dWdx2y
-        dWdxy2
-        dWdy3
-        Oxdot
-        Oydot
+        dWdx, dWdy, 
+        dWdx2, dWdxy, dWdy2
+        dWdx3, dWdx2y, dWdxy2, dWdy3
+        Oxdot, Oydot
     end
     methods
+        function obj = forced_plate_simulator(geometryOrFreq, forces, material, mesh)
+            if nargin < 1
+                obj.create_default();
+            elseif nargin < 2
+                obj.create_default_at_frequency(geometryOrFreq);
+            else
+                obj.geometry = geometryOrFreq;
+                obj.force1 = forces(1);
+                obj.force2 = forces(2);
+                obj.material = material;
+                obj.mesh = mesh;
+            end
+        end
+        function disable_force(obj, force_number)
+            switch force_number
+                case 1
+                    obj.force1.enabled = false;
+                case 2
+                    obj.force2.enabled = false;
+            end
+        end
+        function enable_force(obj, force_number)
+            switch force_number
+                case 1
+                    obj.force1.enabled = true;
+                case 2
+                    obj.force2.enabled = true;
+            end
+        end
+        %% data functions
+        function simulate_and_save(obj)
+            obj.simulate_data();
+            obj.save_data();
+        end
+        function simulate_data(obj)
+            obj.calculate_mode_frequencies_and_phases();
+            obj.calculate_displacement();
+            obj.calculate_spectral_terms();
+            obj.collectData();
+        end
+        function save_data(obj)
+            if ~isempty(obj.data)
+                obj.write_velocity_file();
+                obj.write_displacement_file();
+            else
+                warning("data has not been simulated")
+            end
+        end
+        function props = export_plate_power_flow_properties(obj)
+            props = Plate_Properties(obj.geometry.width, obj.geometry.height, obj.geometry.thickness, obj.material.E, obj.material.poisson);
+        end
+        %% plotting functions
         function show_full_analytical_power_flow(obj)
             [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
             [wdotS, OxdotS, OydotS] = obj.conjugate_velocities();
@@ -83,19 +128,6 @@ classdef forced_plate_simulator < handle
             colormap jet
             
         end
-        function obj = forced_plate_simulator(geometryOrFreq, forces, material, mesh)
-            if nargin < 1
-                obj.create_default();
-            elseif nargin < 2
-                obj.create_default_at_frequency(geometryOrFreq);
-            else
-                obj.geometry = geometryOrFreq;
-                obj.force1 = forces(1);
-                obj.force2 = forces(2);
-                obj.material = material;
-                obj.mesh = mesh;
-            end
-        end
         function animate_displacement_in_time(obj, imagData, loops)
             if nargin < 3 
                 loops = 3;
@@ -109,7 +141,6 @@ classdef forced_plate_simulator < handle
             else
                 values = real(obj.WtotalD);
             end            
-            
             figure(1)
             s = surf(W,H,values(:,:,1),values(:,:,1));
             s.EdgeAlpha = 0.0;
@@ -125,43 +156,6 @@ classdef forced_plate_simulator < handle
                 pause(0.1);
             end
         end 
-        function simulate_and_save(obj)
-            obj.simulate_data();
-            obj.save_data();
-        end
-        function simulate_data(obj)
-            obj.calculate_mode_frequencies_and_phases();
-            obj.calculate_displacement();
-            obj.calculate_spectral_terms();
-            obj.collectData();
-        end
-        function save_data(obj)
-            if ~isempty(obj.data)
-                obj.write_velocity_file();
-                obj.write_displacement_file();
-            else
-                warning("data has not been simulated")
-            end
-        end
-        function disable_force(obj, force_number)
-            switch force_number
-                case 1
-                    obj.force1.enabled = false;
-                case 2
-                    obj.force2.enabled = false;
-            end
-        end
-        function enable_force(obj, force_number)
-            switch force_number
-                case 1
-                    obj.force1.enabled = true;
-                case 2
-                    obj.force2.enabled = true;
-            end
-        end
-        function props = export_plate_power_flow_properties(obj)
-            props = Plate_Properties(obj.geometry.width, obj.geometry.height, obj.geometry.thickness, obj.material.E, obj.material.poisson);
-        end
     end
     methods (Access = private)
         function calculate_displacement(obj)
