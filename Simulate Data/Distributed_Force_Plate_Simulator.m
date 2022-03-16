@@ -95,74 +95,92 @@ classdef Distributed_Force_Plate_Simulator < handle
         end
         %% plotting functions
         function [qx, qy] = show_full_analytical_power_flow(obj)
-            nu = obj.material.poisson;
-            x1 = (obj.dWdx3 + obj.dWdxy2)   .* conj(obj.dWdt);
-            x2 = (obj.dWdx2 + nu*obj.dWdy2) .* conj(obj.dWdxt);
-            x3 = (1-nu) * obj.dWdxy         .* conj(obj.dWdyt);
-            qx = obj.D/2 * real(x1 - x2 - x3);
-            y1 = (obj.dWdy3 +obj.dWdx2y)    .* conj(obj.dWdt);
-            y2 = (obj.dWdy2 + nu*obj.dWdx2) .* conj(obj.dWdyt);
-            y3 = (1-nu) * obj.dWdxy          .* conj(obj.dWdxt);
-            qy = obj.D/2 * real(y1-y2-y3);            
+%             nu = obj.material.poisson;
+%             x1 = (obj.dWdx3 + obj.dWdxy2)   .* conj(obj.dWdt);
+%             x2 = (obj.dWdx2 + nu*obj.dWdy2) .* conj(obj.dWdxt);
+%             x3 = (1-nu) * obj.dWdxy         .* conj(obj.dWdyt);
+%             qx = obj.D/2 * real(x1 - x2 - x3);
+%             y1 = (obj.dWdy3 +obj.dWdx2y)    .* conj(obj.dWdt);
+%             y2 = (obj.dWdy2 + nu*obj.dWdx2) .* conj(obj.dWdyt);
+%             y3 = (1-nu) * obj.dWdxy          .* conj(obj.dWdxt);
+%             qy = obj.D/2 * real(y1-y2-y3);            
             [Wid, Hei] = ndgrid(obj.widths, obj.heights);
-            quiver(Wid,Hei, qx, qy);
-            
+%             quiver(Wid,Hei, qx, qy);
             [qxtest, qytest] = obj.calculate_power_flow();
-            figure()
             quiver(Wid, Hei, qxtest, qytest);
         end
         function show_power_flow_part(obj, type)
-            [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
-            [wdotS, dWdytS, dWdxtS] = obj.conjugate_velocities();
+%             [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
+%             [wdotS, dWdytS, dWdxtS] = obj.conjugate_velocities();
             switch type
                 case {'bending', 'b', 'bend'}
-                    qxp = Mx.*dWdxtS;
-                    qyp = My.*dWdytS;
+                    [qxp, qyp] = obj.calculate_bending_power_flow();
                 case {'twisting', 't', 'twist'}
-                    qxp = Mxy.*dWdytS;
-                    qyp = Mxy.*dWdxtS;
+                    [qxp, qyp] = obj.calculate_twisting_power_flow();
                 case {'shear', 's'}
-                    qxp = Qx.*wdotS;
-                    qyp = Qy.*wdotS;
+                    [qxp, qyp] = obj.calculate_shear_power_flow();
             end
             [Wid, Hei] = ndgrid(obj.widths, obj.heights);
             quiver(Wid, Hei, qxp, qyp, 'color', [1 0 .2]);
             title(type)
         end
-        function show_velocity(obj, type)
-            [wd, Odx, Ody] = obj.conjugate_velocities();
+        function show_velocity(obj, type, isReal)
             switch type
                 case 'wdot'
-                    value = wd;
+                    value = obj.dWdt;
                 case {'Oxdot', 'dWdyt'}
-                    value = Odx;
+                    value = obj.dWdyt;
                 case {'Oydot', 'dWdxt'}
-                    value = Ody;
+                    value = obj.dWdxt;
             end
-            surf(obj.widths, obj.heights, zeros*real(value)', real(value)')
-            view(0,90)
+            if isReal
+                value = real(value);
+                st = 'real ';
+            else
+                value = imag(value);
+                st = 'imag ';
+            end
+            [H, W] = ndgrid(obj.heights, obj.widths);
+            surf(H, W, value', value')
+%             view(0,90)
             colorbar
             colormap jet
-            axis equal
+%             axis equal
+            xlabel('Y')
+            ylabel('X')
+            title(strcat(st, type))
         end
-        function show_resultant(obj, type)
-            [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
+        function show_resultant(obj, type, isReal)
+            if nargin < 3
+                isReal = true;
+            end
             switch type
                 case 'Mx'
-                    value = Mx;
+                    [value, ~, ~] = obj.calculate_moment();
                 case 'My'
-                    value = My;
+                    [~, value, ~] = obj.calculate_moment();
                 case 'Mxy'
-                    value = Mxy;
+                    [~, ~, value] = obj.calculate_moment();
                 case 'Qx'
-                    value = Qx;
+                    [value,~] = obj.calculate_shear();
                 case 'Qy'
-                    value = Qy;
+                    [~, value] = obj.calculate_shear();
             end
-            surf(obj.widths, obj.heights, zeros*real(value), real(value))
-            view(0,90)
+            if isReal
+                value = real(value);
+                st = "real ";
+            else
+                value = imag(value);
+                st = "imag ";
+            end
+            [H, W] = ndgrid(obj.heights, obj.widths);
+            surf(H, W, value', value')
+            xlabel('Y')
+            ylabel('X')
+%             view(0,90)
             colorbar
             colormap jet
+            title(strcat(st, type))
         end
         function animate_displacement_in_time(obj, imagData, loops)
             if nargin < 3
@@ -290,7 +308,7 @@ classdef Distributed_Force_Plate_Simulator < handle
             obj.dfxydy3 =  TS * obj.fx * obj.dfy3;                         
         end
         function calcualte_time_function_and_derivative(obj, M, N)
-            obj.ft(1,1,:) = (cos(obj.FWt-obj.Phi(M,N))-1i*sin(obj.FWt-obj.Phi(M,N)));% create time vector with phase shift as a 1 by 1 by t vector
+            obj.ft(1,1,:) = cos(obj.FWt-obj.Phi(M,N))+1i*sin(obj.FWt-obj.Phi(M,N));% create time vector with phase shift as a 1 by 1 by t vector
             omg = obj.forces(1).omega;
             obj.dft(1,1,:) = 1i*omg*obj.ft(1,1,:);
         end
