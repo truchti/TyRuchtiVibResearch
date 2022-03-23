@@ -109,9 +109,7 @@ classdef Distributed_Force_Plate_Simulator < handle
             [qxtest, qytest] = obj.calculate_power_flow();
             quiver(Wid, Hei, qxtest, qytest);
         end
-        function show_power_flow_part(obj, type)
-%             [Mx, My, Mxy, Qx, Qy] = obj.calculate_moments_and_shears();
-%             [wdotS, dWdytS, dWdxtS] = obj.conjugate_velocities();
+        function [qxp, qyp] = show_power_flow_part(obj, type)
             switch type
                 case {'bending', 'b', 'bend'}
                     [qxp, qyp] = obj.calculate_bending_power_flow();
@@ -124,7 +122,7 @@ classdef Distributed_Force_Plate_Simulator < handle
             quiver(Wid, Hei, qxp, qyp, 'color', [1 0 .2]);
             title(type)
         end
-        function show_velocity(obj, type, isReal)
+        function [X,Y,Z] = show_velocity(obj, type, isReal)
             switch type
                 case 'wdot'
                     value = obj.dWdt;
@@ -143,6 +141,7 @@ classdef Distributed_Force_Plate_Simulator < handle
             [H, W] = ndgrid(obj.heights, obj.widths);
             surf(H, W, value', value')
 %             view(0,90)
+            X = H; Y = W; Z = value;
             colorbar
             colormap jet
 %             axis equal
@@ -150,7 +149,7 @@ classdef Distributed_Force_Plate_Simulator < handle
             ylabel('X')
             title(strcat(st, type))
         end
-        function show_resultant(obj, type, isReal)
+        function [X,Y,Z] = show_resultant(obj, type, isReal)
             if nargin < 3
                 isReal = true;
             end
@@ -175,12 +174,21 @@ classdef Distributed_Force_Plate_Simulator < handle
             end
             [H, W] = ndgrid(obj.heights, obj.widths);
             surf(H, W, value', value')
+            X = H; Y = W; Z = value;
             xlabel('Y')
             ylabel('X')
 %             view(0,90)
             colorbar
             colormap jet
             title(strcat(st, type))
+        end
+        function [X,Y,Z] = show_3D(obj, type, isReal)
+            switch type
+                case {'Mx', 'My', 'Mxy', 'Qx', 'Qy'}
+                    [X,Y,Z] = obj.show_resultant(type, isReal);
+                case{'wdot', 'Oxdot', 'dWdyt', 'Oydot', 'dWdxt'}
+                    [X,Y,Z] = obj.show_velocity(type, isReal);
+            end
         end
         function animate_displacement_in_time(obj, imagData, loops)
             if nargin < 3
@@ -325,7 +333,6 @@ classdef Distributed_Force_Plate_Simulator < handle
             obj.dWdyt = obj.dWdyt + obj.dfxydy .* obj.dft;
             obj.dWdxt = obj.dWdxt + obj.dfxydx .* obj.dft;
         end
-        
         function calculate_force_effect_m_mode(obj, num)
             obj.cosXdiff = cos(num*obj.x1t)-cos(num*obj.x2t);
             obj.C_m = obj.C/num;

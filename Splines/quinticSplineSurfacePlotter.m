@@ -18,6 +18,7 @@ classdef quinticSplineSurfacePlotter < handle
             if nargin > 1
                 obj.plottingPoints_xi = xiPoints;
                 obj.plottingPoints_eta = etaPoints;
+                obj.numberInterpPoints = [length(xiPoints), length(etaPoints)];
             end
             obj.calculate_plotting_points;
         end

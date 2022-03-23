@@ -52,8 +52,8 @@ classdef SLDV_data
             quiver3(X,Y,Z,U,V,W)
         end
         function [params, data, types] = get_flat_spline_fitting_data(obj)
-            params = obj.coordinates(:, 1:2); %get x an y coordinates to use as parameters
-            params(:,1) = params(:,1)- min(params(:,1));
+            params = obj.coordinates(:, 1:2); %get x and y coordinates to use as parameters
+            params(:,1) = params(:,1)- min(params(:,1)); %shift so parameter starts at zero
             params(:,2) = params(:,2)- min(params(:,2));
             data = obj.get_array_of_complex_displacement_and_velocity_values;
             types = {'open', 'open'};
