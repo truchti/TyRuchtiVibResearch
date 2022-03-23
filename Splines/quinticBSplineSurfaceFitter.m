@@ -10,24 +10,29 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
         controlNetDimensions
         xiKnot
         etaKnot
+        boundaryNodeRepeats
     end
     properties (Hidden = true)
         splineEvaluator
         solved = false
     end
     methods
-        function obj = quinticBSplineSurfaceFitter(params, data, types, numberControlPoints, knotVectors)
+        function obj = quinticBSplineSurfaceFitter(params, data, types, numberControlPoints, numberOfRepeatedNodes)
             obj.xiParams = params(:,1);
             obj.etaParams = params(:,2);
             obj.data = data;
             obj.types = types;
             obj.controlNetDimensions = numberControlPoints;
-            if nargin > 4
-                obj.xiKnot = knotVectors{1};
-                obj.etaKnot = knotVectors{2};
+            if nargin < 5
+                obj.boundaryNodeRepeats = [6,6];
             else
-                obj.calculate_knot_vectors;
+                if length(numberOfRepeatedNodes) == 2
+                    obj.boundaryNodeRepeats = numberOfRepeatedNodes;
+                else
+                    obj.boundaryNodeRepeats = repmat(numberOfRepeatedNodes, [1,2]);
+                end
             end
+            obj.calculate_knot_vectors();
         end
         function [xiB, etaB] = fit_spline_surfaces(obj)
             %% Set up evaluator with all zero control Points
@@ -35,7 +40,11 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
             %evaluate basis functions
             [xiB, etaB] = obj.splineEvaluator.evaluate_basis_functions(obj.xiParams, obj.etaParams);
             for i = size(obj.data,2):-1:1
-                obj.splineEvaluator.controlPoints(:,:,i) = numel(obj.data(:,i))*(xiB\diag(obj.data(:,i))/(etaB'));
+                if nnz(obj.data(:,i)) < 1 %% if there is no data in out of plane dimension because it is simulated plate don't calculate
+                    obj.splineEvaluator.controlPoints(:,:,i) = zeros(obj.controlNetDimensions);
+                else
+                    obj.splineEvaluator.controlPoints(:,:,i) = numel(obj.data(:,i))*(xiB\diag(obj.data(:,i))/(etaB'));
+                end
             end
             obj.solved = true;
         end  
@@ -66,7 +75,7 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
         end
         function knotVect = calculate_knot_vector_using_type(obj, numPts, type, minScale, maxScale)
             if strcmp(type, 'open')
-                knotVect = obj.open_loop_knot_vector(numPts, minScale, maxScale);
+                knotVect = obj.open_loop_knot_vector(numPts, minScale, maxScale, obj.boundaryNodeRepeats(1), obj.boundaryNodeRepeats(2));
             elseif strcmp(type, 'closed')
                 knotVect = obj.closed_loop_knot_vector(numPts, minScale, maxScale);
             else
@@ -83,12 +92,29 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
                 knotVector = knotVector./(knotVector(end))* maxVal;
             end
         end
-        function knotVector = open_loop_knot_vector(numPts, minVal, maxVal)
+        function knotVector = open_loop_knot_vector(numPts, minVal, maxVal, numRepeatsStart, numRepeatsEnd)
             npc = numPts+ 6;
             np2 = numPts+2;
+            knotVector = zeros(1,npc); % total number of knots is number of control points plus the order in this case 6
+            for i = 2:npc
+                if i>numRepeatsStart && i<np2 + (6-numRepeatsEnd)
+                    knotVector(i) = knotVector(i-1) + 1;
+                else
+                    knotVector(i) = knotVector(i-1);
+                end
+            end
+            if minVal < 0
+                knotVector = (knotVector - max(knotVector))./max(knotVector)*abs(minVal);
+            else
+                knotVector = knotVector./max(knotVector)*maxVal;
+            end
+        end
+        function knotVector = custom_boundary_open_knot_vectors(numPts, minVal, maxVal, startRepeat, endRepeat)
+            npc = numPts + 6;
+            np2 = numPts + 2;
             knotVector = zeros(1,npc);
             for i = 2:npc
-                if i>6 && i<np2
+                if i > startRepeat && i < np2-endRepeat
                     knotVector(i) = knotVector(i-1) + 1;
                 else
                     knotVector(i) = knotVector(i-1);
