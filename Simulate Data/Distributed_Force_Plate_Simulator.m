@@ -106,8 +106,8 @@ classdef Distributed_Force_Plate_Simulator < handle
 %             qy = obj.D/2 * real(y1-y2-y3);            
             [Wid, Hei] = ndgrid(obj.widths, obj.heights);
 %             quiver(Wid,Hei, qx, qy);
-            [qxtest, qytest] = obj.calculate_power_flow();
-            quiver(Wid, Hei, qxtest, qytest);
+            [qx, qy] = obj.calculate_power_flow();
+            quiver(Wid, Hei, qx, qy);
         end
         function [qxp, qyp] = show_power_flow_part(obj, type)
             switch type
@@ -121,6 +121,29 @@ classdef Distributed_Force_Plate_Simulator < handle
             [Wid, Hei] = ndgrid(obj.widths, obj.heights);
             quiver(Wid, Hei, qxp, qyp, 'color', [1 0 .2]);
             title(type)
+        end
+        function [X,Y,Z] = show_displacement(obj, isReal)
+            if nargin< 2
+                isReal = true;
+            end
+            value = obj.WtotalF;
+            if isReal
+                value = real(value);
+                st = 'real ';
+            else
+                value = imag(value);
+                st = 'imag ';
+            end
+            [H, W] = ndgrid(obj.heights, obj.widths);
+            surf(H, W, value', value')
+%             view(0,90)
+            X = H; Y = W; Z = value;
+            colorbar
+            colormap jet
+%             axis equal
+            xlabel('Y')
+            ylabel('X')
+            title(strcat(st, 'displacement' ))
         end
         function [X,Y,Z] = show_velocity(obj, type, isReal)
             switch type
@@ -182,12 +205,81 @@ classdef Distributed_Force_Plate_Simulator < handle
             colormap jet
             title(strcat(st, type))
         end
-        function [X,Y,Z] = show_3D(obj, type, isReal)
+        function [X,Y,Z] = show_derivative(obj, type, isReal)
+            if nargin < 3
+                isReal = true;
+            end
             switch type
+                case 'dwdx'
+                    value = obj.dWdx;
+                case 'dwdy'
+                    value = obj.dWdy;
+                case 'dwdxy'
+                    value = obj.dWdxy;
+                case 'dwdx2'
+                    value = obj.dWdx2;
+                case 'dwdy2'
+                    value = obj.dWdy2;
+                case 'dwdxy2'
+                    value = obj.dWdxy2;
+                case 'dwdx2y'
+                    value = obj.dWdx2y;
+                case 'dwdx3'
+                    value = obj.dWdx3;
+                case 'dwdy3'
+                    value = obj.dWdy3;
+            end
+            if isReal
+                value = real(value);
+                st = "real ";
+            else
+                value = imag(value);
+                st = "imag ";
+            end
+            [H, W] = ndgrid(obj.heights, obj.widths);
+            surf(H, W, value', value')
+            X = H; Y = W; Z = value;
+            xlabel('Y')
+            ylabel('X')
+%             view(0,90)
+            colorbar
+            colormap jet
+            title(strcat(st, type))
+        end
+        function [X,Y,Z] = show_power_component(obj,type)
+            [qx, qy] = obj.calculate_shear_power_flow()
+            switch type
+                case {'qx'}
+                    value = qx;
+                case {'qy'}
+                    value = qy;
+            end
+            st = '';
+            [H, W] = ndgrid(obj.heights, obj.widths);
+            surf(H, W, value', value')
+            X = H; Y = W; Z = value;
+            xlabel('Y')
+            ylabel('X')
+%             view(0,90)
+            colorbar
+            colormap jet
+            title(strcat(st, type))            
+        end
+        function [X,Y,Z] = show_3D(obj, type, isReal)
+            if nargin < 3
+                isReal = true;
+            end
+            switch type
+                case {'qx', 'qy'}
+                    [X,Y,Z] = obj.show_power_component(type);
+                case 'w'
+                    [X,Y,Z] = obj.show_displacement(isReal);
                 case {'Mx', 'My', 'Mxy', 'Qx', 'Qy'}
                     [X,Y,Z] = obj.show_resultant(type, isReal);
                 case{'wdot', 'Oxdot', 'dWdyt', 'Oydot', 'dWdxt'}
                     [X,Y,Z] = obj.show_velocity(type, isReal);
+                otherwise
+                    [X,Y,Z] = obj.show_derivative(type, isReal);
             end
         end
         function animate_displacement_in_time(obj, imagData, loops)
@@ -222,7 +314,7 @@ classdef Distributed_Force_Plate_Simulator < handle
     methods (Access = private) %helper functions
         %% calculation steps
         function calculate_mode_frequencies_and_phases(obj)
-            scale = pi^2*sqrt(-obj.D/(obj.material.density*obj.geometry.thickness));
+            scale = pi^2*sqrt(obj.D/(obj.material.density*obj.geometry.thickness));
             obj.nOmega = zeros(obj.mesh.width_modes,obj.mesh.height_modes);
             obj.complexDampingPhase = zeros(size(obj.nOmega));
             for m = 1:obj.mesh.width_modes
@@ -451,7 +543,7 @@ classdef Distributed_Force_Plate_Simulator < handle
             value = strcat('plate_simulation_2_forces_', date, '_', num2str(obj.forces(1).frequency), '_Hz');
         end
         function value = get.D(obj)
-            value = -obj.material.E*obj.geometry.thickness^3/(12*(1-obj.material.poisson));
+            value = obj.material.E*obj.geometry.thickness^3/(12*(1-obj.material.poisson^2));
         end
         function value = get.heights(obj)
             value = linspace(0,obj.geometry.height,obj.mesh.height_divisions+1);
