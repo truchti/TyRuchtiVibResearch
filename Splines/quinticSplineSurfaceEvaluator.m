@@ -92,7 +92,16 @@ classdef quinticSplineSurfaceEvaluator < matlab.mixin.Copyable
                 surfaceValues(:,:,i) = xiValues*obj.controlPoints(:,:,i)*etaValues';
             end
         end
-        
+        function plot_spline(obj, xi, eta)
+            v = obj.evaluate_surface_at_parameters(xi,eta);
+            [X,Y] = ndgrid(xi,eta);
+            surf(X,Y,v)
+        end
+        function plot_derivative(obj, xi, eta, dxi, deta)
+            v = obj.evaluate_surface_derivative_at_parameter(xi,eta,dxi,deta);
+            [X,Y] = ndgrid(xi,eta);
+            surf(X,Y,v)
+        end
         function values = evaluate_surface_derivative_at_parameter(obj, xi, eta, dxi, deta)
             obj.validate_or_create_deriv_evaluator(xi, eta);
             values = obj.derivativeEvaluator.evaluate_derivative_given_xi_and_eta_orders(dxi,deta);            

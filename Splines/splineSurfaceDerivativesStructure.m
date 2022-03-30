@@ -29,6 +29,9 @@ classdef splineSurfaceDerivativesStructure
             obj.dddeta = dddeta;
         end
         function value = evaluate_derivative_given_xi_and_eta_orders(obj, dxi, deta, splineNumber)
+            if nargin < 4
+                splineNumber = 1;
+            end
             derivStr = obj.convert_derivative_orders_to_string(dxi, deta);
             value = obj.evaluate_surface_derivative(derivStr, splineNumber);            
         end
