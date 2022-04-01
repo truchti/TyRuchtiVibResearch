@@ -95,17 +95,7 @@ classdef Distributed_Force_Plate_Simulator < handle
         end
         %% plotting functions
         function [qx, qy] = show_full_analytical_power_flow(obj)
-%             nu = obj.material.poisson;
-%             x1 = (obj.dWdx3 + obj.dWdxy2)   .* conj(obj.dWdt);
-%             x2 = (obj.dWdx2 + nu*obj.dWdy2) .* conj(obj.dWdxt);
-%             x3 = (1-nu) * obj.dWdxy         .* conj(obj.dWdyt);
-%             qx = obj.D/2 * real(x1 - x2 - x3);
-%             y1 = (obj.dWdy3 +obj.dWdx2y)    .* conj(obj.dWdt);
-%             y2 = (obj.dWdy2 + nu*obj.dWdx2) .* conj(obj.dWdyt);
-%             y3 = (1-nu) * obj.dWdxy          .* conj(obj.dWdxt);
-%             qy = obj.D/2 * real(y1-y2-y3);            
             [Wid, Hei] = ndgrid(obj.widths, obj.heights);
-%             quiver(Wid,Hei, qx, qy);
             [qx, qy] = obj.calculate_power_flow();
             quiver(Wid, Hei, qx, qy);
         end
@@ -247,7 +237,7 @@ classdef Distributed_Force_Plate_Simulator < handle
             title(strcat(st, type))
         end
         function [X,Y,Z] = show_power_component(obj,type)
-            [qx, qy] = obj.calculate_shear_power_flow()
+            [qx, qy] = obj.calculate_shear_power_flow();
             switch type
                 case {'qx'}
                     value = qx;

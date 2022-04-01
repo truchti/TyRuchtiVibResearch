@@ -67,11 +67,11 @@ classdef ChebyshevBasisEvaluator < handle
                     if mod(n-p,2) == mod(k,2)
                         if k == 0
                             nCk = nchoosek((n+p-k)/2-1, (n-p-k)/2);
-                            fq = a_factorial_over_b_factorial((n+p+k)/2-1, (n-p+k)/2);
+                            fq = a_fact_o_b_fact((n+p+k)/2-1, (n-p+k)/2);
                             dT = 1/2*(nCk*fq* obj.Txi(:,k+1));
                         else
                             nCk = nchoosek((n+p-k)/2-1, (n-p-k)/2);
-                            fq = a_factorial_over_b_factorial((n+p+k)/2-1, (n-p+k)/2);
+                            fq = a_fact_o_b_fact((n+p+k)/2-1, (n-p+k)/2);
                             dT = dT+(nCk*fq* obj.Txi(:,k+1));
                         end
                     end
@@ -81,6 +81,6 @@ classdef ChebyshevBasisEvaluator < handle
         end
     end
 end
-function val = a_factorial_over_b_factorial(a,b)
-    val = pochhammer(b+1, a-b);
+function val = a_fact_o_b_fact(a,b)    
+        val = factorial(a)/ factorial(b);
 end

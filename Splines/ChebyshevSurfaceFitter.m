@@ -34,12 +34,18 @@ classdef ChebyshevSurfaceFitter < handle
                 obj.values = values;
             end
             obj.dummySurf = ChebyshevSurface(zeros(obj.order(1)+1, obj.order(2)+1),obj.rngX, obj.rngY);
+%             obj.fit_data();
+%             obj.create_fit_surface_object();
+        end
+        function surf = fit_surface_to_new_values(obj, values)
+            obj.values = values;
             obj.fit_data();
-            obj.create_fit_surface_object();
+            surf = obj.fitSurface;
         end
         function fit_data(obj)
             [~, Txim, Tetan] = obj.dummySurf.eval(obj.data_x,obj.data_y);
             obj.coeffNet = numel(obj.values)*(Txim\diag(obj.values)/(Tetan'));            
+            obj.create_fit_surface_object();
         end
         function srf = create_fit_surface_object(obj)
             obj.fitSurface = ChebyshevSurface(obj.coeffNet, obj.rngX, obj.rngY);
