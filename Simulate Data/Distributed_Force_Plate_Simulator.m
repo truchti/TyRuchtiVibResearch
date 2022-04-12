@@ -326,7 +326,6 @@ classdef Distributed_Force_Plate_Simulator < handle
                     for N = 1:obj.mesh.height_modes
                         obj.calculate_force_effect_n_mode(N);
                         obj.calculate_vertical_disp_and_deriv_vectors(N);
-                        
                         obj.calc_mode_disp_as_func_of_x_y_t_and_derivs(M,N);
                     end
                 end

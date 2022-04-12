@@ -1,4 +1,4 @@
-classdef sinusoidalForce
+classdef sinusoidalForce < handle
     properties
         location
         magnitude
@@ -66,6 +66,12 @@ classdef sinusoidalForce
             obj.magnitude = 400;
             obj.frequency = 60;
             obj.phase = 178;
+        end
+        function set_angle_loc(obj, angle)
+            obj.location(2) = angle;
+        end
+        function set_height_loc(obj, height)
+            obj.location(1) = height;
         end
     end
 end
