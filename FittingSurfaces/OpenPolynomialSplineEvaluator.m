@@ -1,0 +1,2 @@
+classdef OpenPolynomialSplineEvaluator < SplineEvaluator
+end
