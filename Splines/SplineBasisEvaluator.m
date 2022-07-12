@@ -238,6 +238,4 @@ classdef SplineBasisEvaluator < handle
             d3 = (T*obj.D^3)*obj.N;
         end
     end
-%     methods (Hidden = true, Static = true)
-%     end
 end

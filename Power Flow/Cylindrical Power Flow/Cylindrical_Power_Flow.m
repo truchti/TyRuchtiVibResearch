@@ -317,9 +317,9 @@ classdef Cylindrical_Power_Flow <handle
             obj.iqlong = 1/2*imag(fullqlong);
         end
         function  convert_to_cylindrical_coordinates(obj)
-                obj.rectToCylConverter = CylCoorParameterizer(obj.originalData);
-                obj.rectToCylConverter.calculate_cylindrical_data();
-                obj.cylindricalData = obj.rectToCylConverter.export_cylindrical_data;
+            obj.rectToCylConverter = CylCoorParameterizer(obj.originalData);
+            obj.rectToCylConverter.calculate_cylindrical_data();
+            obj.cylindricalData = obj.rectToCylConverter.export_cylindrical_data;
         end
         function [vt, vr, vz, omegat, omegaz] = calculate_conjugate_velocities(obj, xi,eta)
             if nargin < 2

@@ -106,7 +106,7 @@ classdef quinticSplineBasisEvaluator < handle
                 % put basis values into correct part of full basis values vector
             end
         end
-        %% This is where rank is depleated by open loop
+        %%
         function [values, d1, d2, d3] = open_loop_basis_derivatives(obj, parameter)
             npts = obj.numberOfControlPoints;
             values = zeros(length(parameter), npts);
@@ -196,11 +196,28 @@ classdef quinticSplineBasisEvaluator < handle
                 d3(pt,:) = temp3(1:npts);
             end            
         end
-        function [values, d1, d2, d3] = closed_loop_basis_derivatives(obj, parameter)
+        function [values, d1, d2, d3] = closed_loop_basis_derivatives(obj, parameter, swtch)
+            if nargin< 3
+                swtch = true;
+            end
+            if swtch
+                [values, d1, d2, d3] = obj.matrix_closed_loop_basis_derivatives(parameter);
+            else 
+                [values, d1, d2, d3] = obj.coor_closed_loop_basis_derivatives(parameter);
+            end
+        end
+        function [values, d1, d2, d3] = coor_closed_loop_basis_derivatives(obj, parameter)
             values = zeros(length(parameter), obj.numberOfControlPoints);
             d1 = zeros(length(parameter), obj.numberOfControlPoints);
             d2 = zeros(length(parameter), obj.numberOfControlPoints);
             d3 = zeros(length(parameter), obj.numberOfControlPoints);
+        end
+        function [values, d1, d2, d3] = matrix_closed_loop_basis_derivatives(obj, parameter)
+            values = zeros(length(parameter), obj.numberOfControlPoints);
+            d1 = zeros(length(parameter), obj.numberOfControlPoints);
+            d2 = zeros(length(parameter), obj.numberOfControlPoints);
+            d3 = zeros(length(parameter), obj.numberOfControlPoints);
+            scaling = 1/mean(diff(obj.knotVector));
             for param_index = 1:length(parameter)
                 %find knots that surround parameter value ( if parameter equals knot value
                 %take that knot and the next knot to be the surrounding knots

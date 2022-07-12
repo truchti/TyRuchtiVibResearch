@@ -92,6 +92,14 @@ classdef quinticSplineSurfaceEvaluator < matlab.mixin.Copyable
                 surfaceValues(:,:,i) = xiValues*obj.controlPoints(:,:,i)*etaValues';
             end
         end
+        function plot_spline_number(obj, xi, eta, number, derivs)
+            v = obj.evaluate_spline_number_at_parameters(xi, eta, number, derivs);
+            Zs = max(max(v))
+            Ws = min(min(v))
+            [X,Y] = ndgrid(xi,eta);
+            surf(X,Y,v, 'EdgeAlpha', 0);
+            view(0,90); colormap jet; colorbar;
+        end
         function plot_spline(obj, xi, eta)
             v = obj.evaluate_surface_at_parameters(xi,eta);
             [X,Y] = ndgrid(xi,eta);
@@ -152,7 +160,7 @@ classdef quinticSplineSurfaceEvaluator < matlab.mixin.Copyable
         end
         function validate_or_create_deriv_evaluator(obj, xi, eta)
             if isempty(obj.derivativeEvaluator) || isempty(obj.derivativeEvaluator.controlPoints)|| ~obj.derivativeEvaluator.check_xi_and_eta(xi,eta)
-                    obj.create_derivative_evaluator(xi,eta)
+                obj.create_derivative_evaluator(xi,eta)
             end
         end
         function create_derivative_evaluator(obj, xi, eta)

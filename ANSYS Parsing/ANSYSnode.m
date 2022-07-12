@@ -69,9 +69,9 @@ classdef ANSYSnode < handle
         function add_disp_or_vel(obj, type, value)
             %for ever and always
             switch type
-                case {'u', 'rad'}
+                case {'u', 'rad', 'r'}
                     obj.u = value;
-                case {'v', 'theta'}
+                case {'v', 'theta', 'th', 't'}
                     obj.v = value;
                 case {'w', 'long'}
                     obj.w = value;

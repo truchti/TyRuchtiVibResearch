@@ -26,6 +26,7 @@ classdef ElementAndNodeParser < handle
         listOfNodalResults = {'u', 'v', 'w', 'udot', 'vdot', 'wdot'};
         isCylinder = false;
         nodeNumToIndex
+        progBar
     end
     methods
         function obj = ElementAndNodeParser(file, dataDirectory)
@@ -44,6 +45,7 @@ classdef ElementAndNodeParser < handle
             % open file
             obj.fid = fopen(obj.datFile);
             %read in line until I find either nblock or eblock
+            obj.progBar = waitbar(0, 'Identifying all nodes');
             while(~(obj.foundNodes && obj.foundElements))
                 string = fgetl(obj.fid);
                 if ischar(string) && contains(string, 'eblock')
@@ -51,14 +53,20 @@ classdef ElementAndNodeParser < handle
                 end
                 if ischar(string) && contains(string, 'nblock')
                     obj.read_in_nodes();
+                    waitbar(1/10, obj.progBar, 'Identifying Elements')
                 end
             end
+            waitbar(2/10, obj.progBar, 'Constructing Mesh')
             fclose(obj.fid);
             obj.create_nodes_from_data();
             obj.create_elements_from_data();
+            waitbar(3/10, obj.progBar, 'Reading in elemental resultants')
             obj.read_in_all_element_results();
+            waitbar(6/10, obj.progBar, 'Reading in nodal displacements')
             obj.read_in_all_nodal_results();
+            waitbar(95/100, obj.progBar, 'Connecting Elements and Nodes')
             obj.add_element_relation_to_nodes();
+            close(obj.progBar)
         end        
         function mesh = export_mesh_object(obj, thetaShift)
             if obj.isCylinder
@@ -71,7 +79,7 @@ classdef ElementAndNodeParser < handle
             end
             mesh.calculate_angular_rotation_velocities();
         end
-        end
+    end
     methods (Hidden = true)
         function set_as_cylinder(obj)
             obj.listOfNodalResults = {'theta','rad', 'long', 'thdot', 'rdot', 'ldot'};

@@ -13,12 +13,12 @@ classdef Planar_Power_Flow <handle
         yPtsCurrent
         surfaces
         dirty = true;
-        qxshear
-        qxbend
-        qxtwist
-        qyshear
-        qybend
-        qytwist
+%         qxshear
+%         qxbend
+%         qxtwist
+%         qyshear
+%         qybend
+%         qytwist
     end
     properties (Dependent)
         D  

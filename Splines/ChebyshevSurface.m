@@ -39,7 +39,7 @@ classdef ChebyshevSurface
             dTetan = obj.YbasisEvaluator.deriv_eval(etas, deriv(2));
             detady = mean(diff(etas)./diff(ypts)); % assumes linear mapping
             dfdxieta = dTxim *obj.coeffNet * dTetan';
-            dfdx = dfdxieta * (dxidx^(deriv(1)) * detady^(deriv(2)));
+            dfdx = dfdxieta * (dxidx.^(deriv(1)) * detady.^(deriv(2)));
         end
         function plot(obj, xpts, ypts)
             fxy = obj.eval(xpts, ypts);

@@ -86,5 +86,4 @@ classdef PlanarPowerFlowSurfaceStructure < handle
             vals = obj.evaluate_surface_at_points(type, xpts,ypts);
         end
     end
-    
 end

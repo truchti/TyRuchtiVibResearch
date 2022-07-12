@@ -13,22 +13,14 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         nodeResultList = {'u', 'v', 'w', 'udot', 'vdot', 'wdot'};
         Fitter
         DotSpline
-        qt
-        ql
-        qtimag
-        qlimag
-        LMxx
-        LMxy
-        LNxx
-        LNxy
-        LQ
-        TMxx
-        TMxy
-        TNxx
-        TNxy
-        TQ
+        Splines
+        qt; ql; qtimag; qlimag;
+        LMxx; LMxy; LNxx; LNxy; LQ;
+        TMxx; TMxy; TNxx; TNxy; TQ;
         nodeIndxMap
         thetaShift = 0
+        triData
+        valid_types = {'w', 'wdot', 'M11', 'M22', 'M12', 'N11', 'N22', 'N12', 'Q1', 'Q2', 'betaDotX', 'betaDotY'}
     end
     methods
         function obj = ANSYS_181Shell_Cylindrical_Mesh(nodes, elements, nodeResultTypes, IndxMap)
@@ -40,16 +32,63 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             end
             obj.extrapolate_all_resultants_to_nodes();
         end
+        %% plotting
+        function fast_plot(obj, compnt, realPart)
+            if isempty(obj.triData)
+                obj.fast_plot_data_setup();
+            end
+            if nargin < 3
+                realPart = true;
+            end
+            ntype = obj.convert_type_to_node_type(compnt);
+            X = obj.triData.coors(:,1);
+            Y = obj.triData.coors(:,2);
+            V = obj.triData.(ntype);
+            if realPart
+                V = real(V);
+            else
+                V = imag(V);
+            end
+            trisurf(obj.triData.connects, X,Y,V);
+            shading interp
+            colormap jet; colorbar;
+            axis equal; view(0,90);
+        end
+        function plot_component(obj, compnt, realPart, forcePatches)
+            % plot the patches that represents each element
+            if nargin < 3 
+                realPart = true; 
+            end
+            if nargin < 4
+                forcePatches = false;
+            end
+            if forcePatches
+                obj.plot_flat(compnt, realPart);
+            else
+                obj.fast_plot(compnt, realPart);
+            end
+        end
+        function vMax = plot_RI_component(obj, compnt)
+            subplot(2,1,1);
+            obj.plot_component(compnt, true)
+%             title(['Real ', compnt]);
+            
+            h = subplot(2,1,2);
+            obj.plot_component(compnt, false)
+%             title(['Imag ', compnt]);
+            vMax = h.CLim;
+        end
+        function plot_cyl_component(obj, compnt)
+            obj.plot_nodal_result(compnt)
+        end
         function plot_element_result(obj, type)
             for ele = 1:length(obj.elements)
                 resultantValue = obj.elements(ele).get_resultant(type);
                 [Xs, Ys, Zs] = obj.get_nodal_coordinates_from_element(ele);
                 patch(Xs, Ys, Zs, real(resultantValue))
             end
-            colormap(gca, jet)
-            view(0,35)
-            axis equal
-            colorbar
+            colormap(gca, jet); colorbar
+            view(0,35); axis equal
         end
         function plot_nodal_result(obj, type, scale)
             if nargin < 3
@@ -65,56 +104,43 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             axis equal
             colorbar
         end
-        function plot_flat_nodal_result(obj,type, isReal)
-            if nargin < 3 
-                isReal = true;
-            end
+        function plot_flat(obj, type, isReal)
             for e = 1:length(obj.elements)
                 [Xs, Ys, Zs] = obj.get_nodal_coordinates_from_element(e);
-                thetas = atan2(Ys,Xs);
-                Thetas = wrapTo2Pi(thetas+obj.thetaShift);
-                if max(Thetas) - min(Thetas) > 3
-                    Thetas(Thetas<3) = Thetas(Thetas<3)+ 2*pi;
-                end
-                rads = (Xs.^2 + Ys.^2).^(1/2);
-                rad = mean(rads);
+                Cir = obj.convert_xy_to_circumference(Xs,Ys);
+                Hei = Zs;
                 nodeValues = obj.get_nodal_values_for_an_element(type, e);
                 if isReal
                     Values = real(nodeValues);
                 else
                     Values = imag(nodeValues);
                 end
-                patch(Thetas*rad, Zs, -.001*ones(size(rads)), Values, 'EdgeColor', 'none');
+                patch(Cir, Hei, 0*ones(size(Cir)), Values, 'EdgeColor', 'none');
             end
-            colormap(gca, jet)
-            axis equal
-            colorbar
+            xlabel('Tangential'); ylabel('Height')
+            if isReal
+                title(['Real ', type]);
+            else
+                title(['Imag ', type]);
+            end
+            colormap(gca, jet); axis equal; colorbar
         end
         function power_flow_component_magnitudes(obj)
             clc
             fprintf('Magnitude of Power Contributions by component in Longitudinal Direction:\n')
-            ShearMag = max(max(abs(obj.LQ)));
-            NxxMag = max(max(abs(obj.LNxx)));
-            NxyMag = max(max(abs(obj.LNxy)));
-            MxxMag = max(max(abs(obj.LMxx)));
+            ShearMag = max(max(abs(obj.LQ))); NxxMag = max(max(abs(obj.LNxx)));
+            NxyMag = max(max(abs(obj.LNxy))); MxxMag = max(max(abs(obj.LMxx)));
             MxyMag = max(max(abs(obj.LMxy)));
-            fprintf('Shear:\t\t\t %d\n', ShearMag)
-            fprintf('Normal:\t\t\t %d\n', NxxMag)
-            fprintf('CrossNormal:\t %d\n', NxyMag)
-            fprintf('Moment:\t\t\t %d\n', MxxMag)
+            fprintf('Shear:\t\t\t %d\n', ShearMag); fprintf('Normal:\t\t\t %d\n', NxxMag)
+            fprintf('CrossNormal:\t %d\n', NxyMag); fprintf('Moment:\t\t\t %d\n', MxxMag)
             fprintf('CrossMoment:\t %d\n\n', MxyMag)
-            ShearMag = max(max(abs(obj.TQ)));
-            NxxMag = max(max(abs(obj.TNxx)));
-            NxyMag = max(max(abs(obj.TNxy)));
-            MxxMag = max(max(abs(obj.TMxx)));
+            ShearMag = max(max(abs(obj.TQ))); NxxMag = max(max(abs(obj.TNxx)));
+            NxyMag = max(max(abs(obj.TNxy))); MxxMag = max(max(abs(obj.TMxx)));
             MxyMag = max(max(abs(obj.TMxy)));
             fprintf('Magnitude of Power Contributions by component in Tangential Direction:\n')
-            fprintf('Shear:\t\t\t %d\n', ShearMag)
-            fprintf('Normal:\t\t\t %d\n', NxxMag)
-            fprintf('CrossNormal:\t %d\n', NxyMag)
-            fprintf('Moment:\t\t\t %d\n', MxxMag)
+            fprintf('Shear:\t\t\t %d\n', ShearMag); fprintf('Normal:\t\t\t %d\n', NxxMag); 
+            fprintf('CrossNormal:\t %d\n', NxyMag); fprintf('Moment:\t\t\t %d\n', MxxMag);
             fprintf('CrossMoment:\t %d\n\n', MxyMag)
-            
         end
         function plot_geometry(obj)
             coors = zeros(length(obj.nodes),3);
@@ -132,11 +158,10 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
                 nodeValues = obj.get_nodal_values_for_an_element(type, e);
                 patch(Xs, Ys, imag(nodeValues), imag(scale*nodeValues));
             end
-            colormap(gca, jet)
-            view(0,90)
-            axis equal
-            colorbar
+            colormap(gca, jet); colorbar
+            view(0,90); axis equal
         end
+        %% Power flow
         function calculate_cyl_power_flow(obj)
             %resultants
             [Qt, Ql, Mt, Ml, Mtl, Nt, Nl, Ntl] = obj.get_all_resultants();
@@ -200,7 +225,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             title(ttl);
         end
         function a = plot_cyl_power_flow(obj, backPlot)
-            if nargin< 2 
+            if nargin< 2  
                 backPlot = false;
             end
             a = figure;
@@ -241,6 +266,7 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
         end
     end
     methods(Hidden = true)
+        %% accessing node/element values
         function [Xs, Ys, Zs] = get_nodal_coordinates_from_element(obj, elementNumber)
             ele = obj.elements(elementNumber);
             allCoors = [];
@@ -256,26 +282,26 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
                 Zs = allCoors(:,3);
             end
         end
-        function values = get_nodal_values_for_an_element(obj, type, element)
-            ele = obj.elements(element);
+        function values = get_nodal_values_for_an_element(obj, type, eleNum)
+            ele = obj.elements(eleNum);
+            nodeType = obj.convert_type_to_node_type(type);
             values = [];
-            if contains(type,'Q') ||contains(type,'N')||contains(type,'M')
-                for i = 1:length(ele.nodeNums)
-                    indx = obj.nodeIndxMap(ele.nodeNums(i));
-                    values = [values; obj.nodes(indx).get_resultant(type)]; %#ok<*AGROW>
-                end
-            else
-                for i = 1:length(ele.nodeNums)
-                    indx = obj.nodeIndxMap(ele.nodeNums(i));
-                    values = [values; obj.nodes(indx).get_disp_or_vel(type)];
-                end
+            for i = 1:length(ele.nodeNums)
+                indx = obj.nodeIndxMap(ele.nodeNums(i));
+                values = [values; obj.nodes(indx).(nodeType)]; %#ok<*AGROW>
             end
         end
         function extrapolate_all_resultants_to_nodes(obj)
             if ~obj.extrapolatedToNodes
+                fprintf('Extrapolating Resultants: ');
+                prev = '';
                 for r = 1:length(obj.elementResultList)
-                    obj.extrapolate_single_resultant_to_nodes(obj.elementResultList{r});
+                    s = obj.elementResultList{r};
+                    fprintf(repmat('\b', 1, length(prev))); fprintf(s);
+                    obj.extrapolate_single_resultant_to_nodes(s);
+                    prev = s;
                 end
+                fprintf('\n')
                 obj.extrapolatedToNodes = true;
             end
         end
@@ -309,6 +335,23 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
                 values(n) = obj.nodes(n).get_value_by_type(type);
             end
         end
+        %% setup plotter
+        function fast_plot_data_setup(obj)
+            wb = waitbar(0, 'Configuring Data');
+            [T, R, Z] = obj.get_all_node_coordinates_in_cylindrical_coors();
+            obj.triData.coors = [T*mean(R), Z];
+            dt = delaunayTriangulation(T,Z);
+            obj.triData.connects = dt.ConnectivityList;
+            waitbar(1/11, wb);
+            for i = 1:length(obj.valid_types)
+                vtype = obj.valid_types{i};
+                typ = obj.convert_type_to_node_type(vtype);
+                obj.triData.(typ) = obj.get_all_node_value_by_type(typ);
+                waitbar((i+1)/11, wb);
+            end
+            close(wb)
+        end 
+        %% get resultants
         function [Q1, Q2, M11, M22, M12, N11, N22, N12] = get_all_resultants(obj)
             Q1 = obj.get_all_node_value_by_type('Q1');
             Q2 = obj.get_all_node_value_by_type('Q2');
@@ -319,18 +362,14 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             N22 = obj.get_all_node_value_by_type('N22');
             N12 = obj.get_all_node_value_by_type('N12');
         end
+        %% angular velocities
         function [ths, longs, radius] = theta_longitudinal_coordinates_with_fixed_radius(obj)
             [ths, rads, longs] = obj.get_all_node_coordinates_in_cylindrical_coors();
             radius = mean(mean(rads));
         end
         function calculate_angular_rotation_velocities(obj)
             [ths, longs, rad] = obj.theta_longitudinal_coordinates_with_fixed_radius;
-            longs = longs - min(longs);
-            %radial velocity
             rdot = obj.get_all_node_value_by_type('rdot');
-%             OLdot = drad^2/(dzdt) = drdotdz
-%             Othdot = dradial^2/dsdt = dradial^2/(rad&*dthdt) =
-%             drdot/dth *1/a;
             % real and imaginary for Olong then real and imag for Otheta
             data = [real(rdot)', imag(rdot)', real(rdot/rad)', imag(rdot/rad)'];
             obj.Fitter = quinticBSplineSurfaceFitter([ths, longs], data, {"closed", "open"}, obj.splineSegmentNumbers);
@@ -338,19 +377,76 @@ classdef ANSYS_181Shell_Cylindrical_Mesh < handle
             obj.DotSpline = obj.Fitter.output_solved_spline_evaluator();
             %take derivatives wrt th and long vars
             %for each node evaluate derivatives and save value
-            for n = 1:length(obj.nodes)                                                                                   %param, param, fitting data, derive order of 1st and 2nd param
+            for n = 1:length(obj.nodes)         %param, param, fitting data, derive order of 1st and 2nd param
                 BetaDotThetaReal= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 1, [0,1]); %e.g. dw/dl real
                 BetaDotThetaImag= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 2, [0,1]); % dw/dl imag
                 betaDTh =  complex(BetaDotThetaReal, BetaDotThetaImag);
                                                                                      %param, param, fitting data, derive order of 1st and 2nd param
-                BetaDotLongReal= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 3, [1,0]); % d(w/a)/dth real
-                BetaDotLongImag= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 4, [1,0]); % d(w/a)/dth real
+                BetaDotLongReal= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 1, [1,0]); % d(w/a)/dth real
+                BetaDotLongImag= obj.DotSpline.evaluate_spline_number_at_parameters(ths(n), longs(n), 2, [1,0]); % d(w/a)/dth real
                 betaDL = complex(BetaDotLongReal, BetaDotLongImag);
                 % save values to node
                 obj.nodes(n).add_disp_or_vel('betaDotTh', betaDTh);
                 obj.nodes(n).add_disp_or_vel('betaDotLong',betaDL);
+            end            
+        end
+        function calc_derivatives_with_splines(obj)
+            [ths, longs, radius] = obj.theta_longitudinal_coordinates_with_fixed_radius;
+            longs = longs - min(longs); % ensure knot vector starts at zero
+            %radial velocity
+            r = obj.get_all_node_value_by_type('u'); % the radial component is stored in u in each node
+            rdot = obj.get_all_node_value_by_type('udot'); % the radial component is stored in u in each node
+            % real and imaginary for Olong then real and imag for Otheta
+            data = [real(r)', imag(r)', real(rdot)', imag(rdot)']; 
+            obj.Fitter = quinticBSplineSurfaceFitter([ths, longs], data, {"closed", "open"}, obj.splineSegmentNumbers);
+            obj.Fitter.fit_spline_surfaces();
+            obj.Splines = obj.Fitter.output_solved_spline_evaluator();
+        end
+    end
+    methods (Static = true)
+        function [Cir] = convert_xy_to_circumference(Xs, Ys)
+            thetas = atan2(Ys,Xs);
+            Thetas = wrapTo2Pi(thetas);
+            if max(Thetas) - min(Thetas) > 3
+                Thetas(Thetas<3) = Thetas(Thetas<3)+ 2*pi;
             end
+            rad = mean((Xs.^2 + Ys.^2).^(1/2));
+            Cir = Thetas* rad;
+        end
             
+        function nodeType = convert_type_to_node_type(resType)
+            switch resType
+                case {'N1', 'N11', 'Nx', 'Nl', 'NL'}
+                    nodeType = 'N11';
+                case {'N2', 'N22', 'Ntheta', 'N0', 'NO', 'Nth'}
+                    nodeType = 'N22';
+                case {'N12', 'N21','N0L', 'Nthx', 'NL0', 'NLO', 'NOL' 'Nxth'}
+                    nodeType = 'N12';
+                case {'M1', 'M11', 'Mx', 'Ml', 'ML'}
+                    nodeType = 'M11';
+                case {'M2', 'M22', 'Mtheta', 'M0', 'MO', 'Mth'}
+                    nodeType = 'M22';
+                case {'M12', 'M21','M0L', 'Mthx', 'ML0', 'MLO', 'MOL' 'Mxth'}
+                    nodeType = 'M12';
+                case {'Q1', 'Ql', 'Qx', 'QL'}
+                    nodeType = 'Q1';
+                case {'Q2', 'QO', 'Q0', 'Qth', 'Qtheta'}
+                    nodeType = 'Q2';
+                case {'0dotL', '0dotx', 'OdotL', 'Odotx', 'ThetaDotL', 'thetaDotL', 'BL',}
+                    nodeType = 'betaDotX';
+                case {'0dot0', '0doty', 'OdotO', 'Odoty', 'ThetaDotO', 'thetaDotO', 'ThetaDot0', 'thetaDot0', 'B0'}
+                    nodeType = 'betaDotY';
+                case {'r', 'rad', 'w'}
+                    nodeType = 'u';
+                case {'rdot', 'raddot', 'wdot'}
+                    nodeType = 'udot';
+                case {'th', 'theta', '0', 'O'}
+                    nodeType = 'v';
+                case {'l', 'long', 'x'}
+                    nodeType ='w';
+                otherwise
+                    nodeType = resType;                    
+            end
         end
     end
 end

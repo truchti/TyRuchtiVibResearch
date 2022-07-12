@@ -376,11 +376,11 @@ classdef Simulate_Forced_Cylinder< handle
             % this equation calculates the equivalent force for calcuating
             % the contribution of a harmonic load at each mode shape
             wmn = obj.nOmega(m,n+1); % mode shape frequency
-            w = frc.omega; % forcing frequency
+            wow2 = (frc.omega/wmn)^2;
             %damping ratio
             zeta = obj.lambda/(2*obj.material.density*obj.geometry.thickness*obj.nOmega(m,n+1));
             % equivalent force 
-            fw = wmn^2 * sqrt((1-(w/wmn)^2)^2 + 4*zeta^2*(w/wmn)^2);
+            fw = wmn^2 * sqrt((1-wow2)^2 + 4*zeta^2*wow2);
         end
         function Nk = calculate_Nk(obj, m, n)
             % calculate the contribution factor from the Mode ratio

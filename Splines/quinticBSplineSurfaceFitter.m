@@ -40,10 +40,16 @@ classdef quinticBSplineSurfaceFitter < matlab.mixin.Copyable
             %evaluate basis functions
             [xiB, etaB] = obj.splineEvaluator.evaluate_basis_functions(obj.xiParams, obj.etaParams);
             for i = size(obj.data,2):-1:1
+                tempData = obj.data(:,i);
                 if nnz(obj.data(:,i)) < 1 %% if there is no data in out of plane dimension because it is simulated plate don't calculate
                     obj.splineEvaluator.controlPoints(:,:,i) = zeros(obj.controlNetDimensions);
                 else
-                    obj.splineEvaluator.controlPoints(:,:,i) = numel(obj.data(:,i))*(xiB\diag(obj.data(:,i))/(etaB'));
+                    if size(obj.data,1) > 9999
+                        tempData = sparse(diag(tempData)); %% if would be too large in memory make a sparse matrix since it is diagonal
+                    else
+                        tempData = diag(tempData);
+                    end
+                    obj.splineEvaluator.controlPoints(:,:,i) = numel(obj.data(:,i))*(xiB\tempData/(etaB'));
                 end
             end
             obj.solved = true;

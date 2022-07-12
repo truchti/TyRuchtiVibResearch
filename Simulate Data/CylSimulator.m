@@ -10,8 +10,7 @@ classdef CylSimulator< handle
         geometry
         mesh
         saveFolder = 'C:\Users\ME\Desktop\RandomData\';
-        dampingOn = true;
-        constDamp = false;
+        phaseCorrection = true
     end
     properties(Dependent)
         fileName
@@ -20,9 +19,10 @@ classdef CylSimulator< handle
         naturalFrequencies
     end
     properties (Hidden = true)
-        timesteps =20;
+        timesteps =50;
         nOmega= [];
         complexDampingPhaseLag = [];
+        useSoedel = false;
         data % structure to hold rectangular coordinate transforms
         %% deriv vars
         w
@@ -31,6 +31,9 @@ classdef CylSimulator< handle
         d2wdL2, d2wdL0, d2wd02
         d3wdL3, d3wdL20, d3wdL02, d3wd03
         d2wdLt, d2wd0t
+        %% test vars
+        denomArray
+        ampArray
     end
     properties (Access = private)
           %% per force vars
@@ -51,7 +54,57 @@ classdef CylSimulator< handle
           aniPlotHandle
           surfHandle
     end
-    
+    %% dimensional derivatives
+    properties(Hidden = true, Dependent = true)
+        % length coors
+        dwdx, dwdy
+        d2wdx2, d2wdxy, d2wdy2
+        d3wdx3, d3wdx2y, d3wdxy2, d3wdy3
+        d2wdxt, d2wdyt
+    end
+    methods
+        function value = get.dwdx(obj)
+            value = obj.dwdL;
+        end
+        function value = get.dwdy(obj)
+            r = obj.geometry.radius;
+            value = 1/r* obj.dwd0;
+        end
+        function value = get.d2wdx2(obj)
+            value = obj.d2wdL2;
+        end
+        function value = get.d2wdxy(obj)
+            r = obj.geometry.radius;
+            value = 1/r* obj.d2wdL0;
+        end
+        function value = get.d2wdy2(obj)
+            r = obj.geometry.radius;
+            value = 1/r^2* obj.d2wd02;
+        end
+        function value = get.d3wdx3(obj)
+            value = obj.d3wdL3;
+        end
+        function value = get.d3wdx2y(obj)
+            r = obj.geometry.radius;
+            value = 1/r* obj.d3wdL20;
+        end
+        function value = get.d3wdxy2(obj)
+            r = obj.geometry.radius;
+            value = 1/r^2* obj.d3wdL02;
+        end
+        function value = get.d3wdy3(obj)
+            r = obj.geometry.radius;
+            value = 1/r^3* obj.d3wd03;
+        end
+        function value = get.d2wdxt(obj)
+            value = obj.d2wdLt;
+        end
+        function value = get.d2wdyt(obj)
+            r = obj.geometry.radius;
+            value = 1/r * obj.d2wd0t;
+        end
+    end
+    %% general methods
     methods
         function obj = CylSimulator(geometry, forces, material, mesh)
             %% creates the object that simulates the displacement of a cylinder to 2 forces at a gived frequency
@@ -71,11 +124,22 @@ classdef CylSimulator< handle
             obj.simulate_data();
             obj.save_data();
         end
+        function simulate_with_specified_mode_frequencies(obj)
+            obj.calculate_complex_damping_phase_lag();
+            obj.calculate_displacements();
+            obj.convert_to_rectangular_coordinates();
+        end
         function simulate_data(obj)
             obj.calculate_mode_frequencies();
             obj.calculate_complex_damping_phase_lag();
             obj.calculate_displacements();
             obj.convert_to_rectangular_coordinates();
+        end
+        function [fRao, fSoe] = compare_both_frequency_calcs(obj)
+            omgRao = obj.rao_nat_freq(obj.mesh.longitude_modes, obj.mesh.theta_modes);
+            omgSoe = obj.soedel_nat_freq(obj.mesh.longitude_modes, obj.mesh.theta_modes);
+            fRao = omgRao/(2*pi);
+            fSoe = omgSoe/(2*pi);
         end
         function save_data(obj)
             % this function creates both the velocity and displacement
@@ -90,20 +154,14 @@ classdef CylSimulator< handle
         %% force adjusting
         function disable_force(obj, force_number)
             % turn off a force from being applied
-            switch force_number
-                case 1
-                    obj.forces(1).enabled = false;
-                case 2
-                    obj.force2.enabled = false;
+            if force_number <= length(obj.forces)
+                obj.forces(force_number).enabled = false;
             end
         end
         function enable_force(obj, force_number)
             % turn on a force so that it affects displacement
-            switch force_number
-                case 1
-                    obj.forces(1).enabled = true;
-                case 2
-                    obj.force2.enabled = true;
+            if force_number <= length(obj.forces)
+                obj.forces(force_number).enabled = true;
             end
         end
         %% plotting
@@ -146,66 +204,29 @@ classdef CylSimulator< handle
             if truScale
                 Th = Th*obj.geometry.radius;
             end
-            pHandle = surf(Th, Lng, values, 'EdgeAlpha', .2);
+            pHandle = surf(Th, Lng, values, 'EdgeAlpha', 0);
             Z = max(max(values));
+%             W = min(min(values));
             obj.plot_forces(Z);
-            xlabel('Tangential')
-            ylabel('Height')            
-            title(type)
-%             colormap jet
-            colorbar
-        end
-        function plot_RI_component(obj, type, truScale)
+            xlabel('Tangential'); ylabel('Height'); title(type);
+            colormap jet; colorbar
+            axis equal; view(0, 90)
+         end
+        function vMax = plot_RI_component(obj, type, truScale)
             if nargin < 3
                 truScale = true;
             end
-            figure('units','normalized','outerposition',[0.05 0.05 .9 .9])
-            s1 = subplot(1,2,1);
+%             figure('units','normalized','outerposition',[0.05 0.05 .5 .35])
+            s1 = subplot(2,1,1);
             obj.plot_component(type, true, truScale);
             s1.Title.String = [s1.Title.String ' Real'];
-            s2 = subplot(1,2,2);
+            s2 = subplot(2,1,2);
             obj.plot_component(type, false, truScale);
             s2.Title.String = [s2.Title.String ' Imag'];
             obj.link_subplots(s1, s2);
+            vMax = s2.CLim;
         end
-        function plot_forces(obj, Z, axisHandle)
-            if nargin < 3
-                axisHandle = gca;
-            end
-            for i = 1:length(obj.forces)
-                if obj.forces(i).enabled
-                    Y = obj.forces(i).xStar;
-                    X = obj.forces(i).tStar* obj.geometry.radius;
-                    hold on;
-                    scatter3(axisHandle, X,Y,Z,'MarkerEdgeColor', [0 0 0] , 'MarkerFaceColor', [.1,.1,.1], 'SizeData', 50)
-                    hold off;
-                end
-            end
-        end
-        function [Th, Lng, values] = get_plot_values(obj, type, isReal)
-            [Th, Lng] = meshgrid(obj.thetas, obj.longs);
-            switch type
-                case {'w', 'W'}
-                    values = obj.w;
-                case {'wDot', 'WDot', 'Wdot', 'wdot', 'dwdt'}
-                    values = obj.wdot;
-                case {'dwdL', 'dwd0', 'd2wdL2', 'd2wdL0', 'd2wd02', 'd3wdL3', 'd3wdL20', 'd3wdL02', 'd3wd03', 'd2wdLt', 'd2wd0t'}
-                    values = obj.(type);
-                case {'M0', 'ML', 'ML0', 'M0L', 'N0', 'NL', 'N0L', 'NL0', 'Q0', 'QL'}
-                    values = obj.calculate_resultant(type);
-                case {'B0', 'BL'}
-                    values = obj.get_ang_vel(type);
-                otherwise
-                    warning('Requested info not availble: check type entered');
-                    values = nan(size(obj.w));
-            end
-            if isReal
-                values = real(values);
-            else
-                values = imag(values);
-            end
-        end 
-        function plot_power_flow(obj, type, truScale)
+        function plot_power_flow(obj, type, truScale)  
             if nargin < 2
                 type = '';
             end
@@ -216,58 +237,48 @@ classdef CylSimulator< handle
             if truScale
                 X = X*obj.geometry.radius;
             end
+            obj.plot_shadow_displacement(X,Y)
+            hold on;
             quiver(X,Y,U,V);
+            obj.plot_pf_forces()
+            hold off;
         end
-        function [X,Y,U,V] = get_quiver_values(obj, type)
-            [X,Y] = meshgrid(obj.thetas, obj.longs);
-            if nargin < 2 || isempty(type)
-                [U,V] = obj.calculate_power_flow();
+        function plot_dim_power_flow(obj, type)
+            [Cir, Len] = meshgrid(obj.geometry.radius*obj.thetas, obj.longs);
+            if nargin < 2
+                [qLen,qCir] = obj.calculate_dimensional_power_flow;
             else
-                [U, V] = obj.calculate_power_flow_part(type);
+                [qLen,qCir] = obj.calculate_power_flow_part(type);
+            end  
+            quiver(Cir, Len, qCir, qLen);
+            obj.plot_pf_forces()
+        end
+        function plot_shadow_displacement(obj,x,y)
+            z = abs(obj.w);
+            surf(x,y,zeros(size(z)),z, 'FaceAlpha', .1, 'EdgeAlpha', 0)
+        end
+        function plot_power_contours(obj)
+            [X,Y,U,V] = obj.get_quiver_values('');
+            X = X*obj.geometry.radius;
+            Z = sqrt(real(U).^2 + real(V).^2);
+            contour(X,Y,Z)            
+        end
+        function maxis = calculate_maximums(obj, pt) 
+            mTypes = {'w', 'wdot', 'ML', 'M0', 'ML0', 'NL', 'N0', 'NL0', 'QL', 'Q0', 'B0', 'BL'};
+            for i = 1:length(mTypes)
+                if i == 2 || i > 10
+                    isReal = false;
+                else
+                    isReal = true;
+                end
+                [x, y, values] = obj.get_plot_values(mTypes{i}, isReal);
+                if nargin >1 
+                    
+                end
+                maxis.(mTypes{i}) = max(values, [], 'all');
             end                
-        end 
+        end
         %% animation
-        function cyl_disp_animation_loop(obj, useReal)
-            if isgraphics(obj.aniPlotHandle)
-                delete(obj.aniPlotHandle);
-            end
-            obj.currentLoopStep = 1;
-            if nargin < 2 
-                useReal = true;
-            end
-            [T, H] = meshgrid([obj.thetas 0], obj.longs);
-            obj.surfX = obj.geometry.radius *cos(T);
-            obj.surfY = obj.geometry.radius * sin(T);
-            obj.surfZ = H;
-            if useReal
-                values = real(obj.w);
-            else
-                values = imag(obj.w);
-            end
-            obj.loopedValues = zeros(size(values) + [0 1 0]);
-            for i = 1:size(values,3)
-                obj.loopedValues(:,:,i) = [values(:,:,i)  values(:,1,i)];
-            end            
-        end
-        function flat_disp_animation_loop(obj, useReal)
-            if isgraphics(obj.aniPlotHandle)
-                delete(obj.aniPlotHandle);
-            end
-            obj.currentLoopStep = 1;
-            if nargin < 2 
-                useReal = true;
-            end
-            [T, H] = meshgrid(obj.thetas, obj.longs);
-            obj.surfX = obj.geometry.radius * T;
-            obj.surfY = H;
-            if useReal
-                values = real(obj.w);
-            else
-                values = imag(obj.w);
-            end
-            obj.surfZ = values;
-            obj.loopedValues = values;       
-        end
         function animate(obj)
             obj.cyl_disp_animation_loop()
             if isempty(obj.animationTimer)
@@ -275,46 +286,23 @@ classdef CylSimulator< handle
             end
             start(obj.animationTimer)
         end
-        function animate_flat(obj)
+        function animate_flat(obj, duration)
             obj.flat_disp_animation_loop()
-            if isempty(obj.animationTimer)
-                obj.setupTimer;
+            if nargin>1 
+                obj.setupTimer(duration);
+            elseif isempty(obj.animationTimer) 
+                obj.setupTimer();
             end
             start(obj.animationTimer)
         end
-        function setupTimer(obj, dt, steps)
-            if nargin < 3
-                steps = 100;
-            end
+        function value = sortedNFs(obj, num)
             if nargin < 2
-                dt = .15;
+                num = Inf;
             end
-            obj.animationTimer = timer('TimerFcn',@(~,~) obj.plot_next_animation_frame,...
-                                    'ExecutionMode','fixedRate',...
-                                    'Period',dt,...
-                                    'TasksToExecute',steps);
-        end
-        function plot_next_animation_frame(obj)
-            if size(obj.surfZ,3) > 1
-                Z = obj.surfZ(:,:,1);
-            else
-                Z = obj.surfZ;
+            value = sort(reshape(obj.naturalFrequencies,[numel(obj.nOmega),1]));
+            if length(value) > num
+                value = value(1:num);
             end
-            if isempty(obj.aniPlotHandle) || ~isgraphics(obj.aniPlotHandle)
-                obj.aniPlotHandle = figure();
-                obj.surfHandle = surf(obj.surfX, obj.surfY, Z, obj.loopedValues(:,:,obj.currentLoopStep));
-                axis equal
-%                 obj.surfHandle.EdgeAlpha = 0.0;
-                obj.surfHandle.FaceColor = 'interp';
-                colorbar
-                clim = max(max(max(obj.loopedValues)));
-                caxis([-clim, clim]) 
-            else
-                obj.surfHandle.ZData = Z;
-                obj.surfHandle.CData = obj.loopedValues(:,:,obj.currentLoopStep);
-            end
-            sz = size(obj.loopedValues,3);
-            obj.currentLoopStep = mod(obj.currentLoopStep+1, sz)+1; 
         end
     end
     methods (Access = private)
@@ -323,7 +311,7 @@ classdef CylSimulator< handle
             % This function calculates the natural frequencies of the modes
             % of the cylinder it also calculates the phase lag associated
             % with the each mode because of the material damping
-            if nargin < 2; useSoedel = true;end
+            if nargin < 2; useSoedel = true; end
             if  ~useSoedel
                 obj.rao_nat_freq(obj.mesh.longitude_modes, obj.mesh.theta_modes);
             else
@@ -332,14 +320,31 @@ classdef CylSimulator< handle
         end
         function calculate_complex_damping_phase_lag(obj)
             eta = obj.material.eta;
-            zpart = obj.lambda/(2*obj.material.density*obj.geometry.thickness); % damping Coeff
+%             zpart = obj.lambda/(2*obj.material.density*obj.geometry.thickness); % damping Coeff
             fomg1 = obj.forces(1).omega; % force Freq
+            %% find closest mode freq to forcing freq
+            diffMatrix = abs( obj.nOmega - fomg1);
+            minDiff = min(min(diffMatrix));
+            indx = find(minDiff == diffMatrix);
+            % if force is really close (<0.1% off) to natural frequency shift phase so
+            % that that mode has fully real displacement
+            if obj.phaseCorrection && (minDiff/obj.nOmega(indx) < .001) 
+                phaseAdjust = atan2(eta,(1-(fomg1/obj.nOmega(indx))^2));
+            else
+                phaseAdjust = 0;
+            end
             for m = 1:obj.mesh.longitude_modes
-                for n = 0:obj.mesh.theta_modes
+                for n = 0:obj.mesh.theta_modes-1
 %                     zeta = zpart/obj.nOmega(m,n+1); % soedel eq 8.3.3 (pg. 212)
-                    zeta = eta*obj.nOmega(m,n+1)/(2*fomg1); % soedel eq 14.3.18
-                    omegRatio = fomg1/obj.nOmega(m,n+1);
-                    obj.complexDampingPhaseLag(m,n+1) = atan2(2*zeta*(omegRatio),(1-(omegRatio)^2)); % sodel eq 8.5.6 pg 215
+%                     zeta = eta*obj.nOmega(m,n+1)/(2*fomg1); % soedel eq 14.3.18
+                    % using relationship on lambda and zeta the numerator
+                    % 2(zeta)(w/wk) equals eta
+                    if obj.mesh.longitude_modes == 1
+                        omegRatio = fomg1/obj.nOmega(n+1);
+                    else
+                        omegRatio = fomg1/obj.nOmega(m,n+1); 
+                    end
+                    obj.complexDampingPhaseLag(m,n+1) = atan2(eta,(1-(omegRatio)^2))-phaseAdjust; % sodel eq 8.5.6 pg 215
                 end
             end
         end
@@ -385,8 +390,8 @@ classdef CylSimulator< handle
             a = obj.geometry.radius;
             L = obj.geometry.height;
             % stiffnesses
-            K = obj.calc_K; % soedel eq 2.5.10; Membrane stiffness
-            D = obj.calc_D; % soedel eq 2.5.16 Bending Stiffness
+            K = obj.calc_D; %Soedel eq 2.5.10 for K is the same as Flugge for D Flugge 5.8a
+            D = obj.calc_K; % soedel eq 2.5.16 same as Flugge for K see flugge 5.8b
             w_squared = zeros(3,mModes, nModes+1);
             for m = 1:mModes
                 for n = 0:nModes
@@ -439,12 +444,15 @@ classdef CylSimulator< handle
                 frc = obj.forces(i);
                 obj.clean_per_force_variables(length(Ls), length(Ts));
                 tstar = frc.tStar; % theta location of Force 
-%                 Phi = frc.phase;
+                % need to shift so that the main mode frequency is at
+                % relative 0 phase shift
                 Phi = frc.phase + obj.complexDampingPhaseLag;
                 phaseMulti = cos(Phi) + 1i*sin(Phi);
                 lStar = frc.xStar; %  longitudinal location of force
                 L = obj.geometry.height;
                 % longitude by theta mode
+%                 obj.denomArray = zeros(obj.mesh.longitude_modes, obj.mesh.theta_modes);
+                obj.ampArray = zeros(obj.mesh.longitude_modes, obj.mesh.theta_modes);
                 for M = 1:obj.mesh.longitude_modes
                     s = M*pi/L; % constant inside of sin terms
                     CM = sin(s*lStar); % m mode force position multiplier
@@ -455,17 +463,22 @@ classdef CylSimulator< handle
                     d3gL = s^3 * -cos(s*Ls);
                     for N = 0:obj.mesh.theta_modes-1
                         %% n mode grid evaluations
+                        if obj.nOmega(M,N+1) == 0 %% if I have zeroed out this mode
+                            continue;
+                        end
                         fO = cos(N*(Ts-tstar)); 
                         dfO = N * -sin(N*(Ts-tstar));
                         d2fO = N^2 * -cos(N*(Ts-tstar));
                         d3fO = N^3 * sin(N*(Ts-tstar));
                         %% mode constants
                         denom = obj.calculate_denominator(frc,M,N);
+                        obj.denomArray(M,N+1) = denom;
                         if numel(phaseMulti) > 1
                             Consts = CM/denom*phaseMulti(M,N+1);
                         else
                             Consts = CM/denom*phaseMulti;
                         end
+                        obj.ampArray(M,N+1) = Consts;
                         %% compute various derivs
                         obj.wforce = obj.wforce + (Consts * gL')*fO;
                         obj.dw = obj.dw + 1i*frc.omega * (Consts*gL')*fO;
@@ -488,7 +501,7 @@ classdef CylSimulator< handle
                 obj.add_scale_force_contribution_to_total(C);
             end
             obj.clean_per_force_variables(0,0);
-        end
+        end            
         %% need to be verified still
         function values = calculate_resultant(obj, type)
             switch type
@@ -500,7 +513,7 @@ classdef CylSimulator< handle
                     [~,~,values, ~] = obj.calculate_moment_resultants();
                 case 'M0L' 
                      [ ~,~,~, values]= obj.calculate_moment_resultants();
-                case 'N0' 
+                case 'N0'
                      [ values, ~,~,~ ]= obj.calculate_normal_resultants();
                 case 'NL' 
                     [ ~,values,~,~] = obj.calculate_normal_resultants();
@@ -549,13 +562,65 @@ classdef CylSimulator< handle
             Q0 = K* (1/a^3*obj.dwd0 + 1/a^3*obj.d3wd03 + v/a* obj.d3wdL02 + (1-v)/a*(obj.d3wdL20- dvdL2));
         end
         function [q0, qL] = calculate_power_flow(obj)
-            [q0norm, qLnorm] = obj.calculate_power_flow_part('normal');
-            [q0bend, qLbend] = obj.calculate_power_flow_part('bend');
-            [q0twst, qLtwst] = obj.calculate_power_flow_part('twist');
-            [q0shear, qLshear] = obj.calculate_power_flow_part('shear');
-            q0 = q0norm + q0bend + q0twst + q0shear;
-            qL = qLnorm + qLbend + qLtwst + qLshear;
+            [q0norm, qLnorm] = obj.calculate_power_flow_normal;
+            [q0bend, qLbend] = obj.calculate_power_flow_bending;
+            [q0twst, qLtwst] = obj.calculate_power_flow_twisting;
+            [q0shear, qLshear] = obj.calculate_power_flow_shear;
+            q0 = q0norm - q0bend - q0twst + q0shear;
+            qL = qLnorm - qLbend - qLtwst + qLshear;
         end
+        %% compute power flow using ext flex and curv
+        function [qX, qY] = calculate_dimensional_power_flow(obj)
+            [qXe, qYe] = obj.calculate_power_flow_extensional();
+            [qXf, qYf] = obj.calculate_power_flow_flextural();
+            [qXc, qYc] = obj.calculate_power_flow_curvature();
+            qX = qXe + qXf + qXc;
+            qY = qYe + qYf + qYc;
+        end
+        function [qX, qY] = calculate_power_flow_extensional(obj)
+            D = obj.calc_D();
+            dudx = zeros(size(obj.w)); 
+            dvdy = dudx; dudy = dudx; dvdx = dudx;
+            udot = dudx; vdot = dudx;
+            nu = obj.material.poisson;
+            qX = -1/2*D*real((dudx+ nu*dvdy).*conj(udot) - (1-nu)/2*(dudy+dvdx).*conj(vdot));
+            qY = -1/2*D*real((nu*dudx+ dvdy).*conj(vdot) - (1-nu)/2*(dudy+dvdx).*conj(udot));
+        end
+        function [qX, qY] = calculate_power_flow_flextural(obj)
+            K = obj.calc_K;
+            nu = obj.material.poisson;
+            [Bdotx, Bdoty] = obj.calculate_beta_dots;
+            qX = -K/2*real((obj.d3wdx3 + obj.d3wdxy2).*conj(obj.wdot) - (obj.d2wdx2 + nu*obj.d2wdy2) .* conj(Bdoty) - (1-nu)*obj.d2wdxy.*conj(Bdotx));
+            qY = -K/2*real((obj.d3wdx2y + obj.d3wdy3).*conj(obj.wdot) - (nu*obj.d2wdx2 + obj.d2wdy2) .* conj(Bdotx) - (1-nu)*obj.d2wdxy.*conj(Bdoty));
+        end
+        function [qX, qY] = calculate_power_flow_curvature(obj)
+            udot = zeros(size(obj.w)); vdot = udot;
+            dudxy = udot; dudy = udot; dvdx = udot; dvdxy = udot;
+            dudy2 = udot; dvdx2 = udot;
+            ax = Inf;
+            ay = obj.geometry.radius;
+            D = obj.calc_D; nu = obj.material.poisson; K = obj.calc_K();
+            [Bdotx, Bdoty] = obj.calculate_beta_dots();
+            qX = -D/ax*nu*obj.w.*udot ...
+                + -K*(nu*(obj.w/ax^2 + obj.d2wdy2).*conj(udot) ...
+              - (1-nu)/2*(obj.d2wdxy - 1/ax*dvdx).*conj(vdot) ...
+                      -(1-nu)/2*(dudy2-dvdxy).*conj(obj.wdot) ... 
+                             - nu/ax*obj.dwdx.*conj(obj.wdot) ...
+                                   + nu/ax*obj.w.*conj(Bdoty) ...
+                          + (1-nu)/2*(dudy-dvdx).*conj(Bdotx));
+                                            
+            qY = -D/ay*obj.w.*vdot...
+                + -K*((1/ay*dudy + obj.d2wdxy).*conj(udot) ...
+                                 + obj.d2wdx2.*conj(vdot) ...
+                  -(1-nu)/2*(dudxy-dvdx2).*conj(obj.wdot) ...
+                          - 1/ay*obj.dwdy.*conj(obj.wdot) ...
+                      + (1-nu)/2*(dudy-dvdx).*conj(Bdoty) ...
+                              + (1/ay)*obj.w.*conj(Bdotx));
+                         
+            qX = -1/2*real(qX);
+            qY = -1/2*real(qY);
+        end
+        %% compute power flow using normals moments and shears
         function [q0p, qLp] = calculate_power_flow_part(obj, type)
             switch type
                 case {'normal', 'norm', 'N', 'n'}
@@ -566,32 +631,39 @@ classdef CylSimulator< handle
                     [q0p, qLp] = obj.calculate_power_flow_twisting();
                 case{'shear', 'shr', 'S', 's'}
                     [q0p, qLp] = obj.calculate_power_flow_shear();
+                case{'e', 'ext', 'extentional', 'E'}
+                    [q0p, qLp] = obj.calculate_power_flow_extensional();
+                case {'f', 'flex', 'flexural', 'F'}
+                    [q0p, qLp] = obj.calculate_power_flow_flextural();
+                case {'c', 'curve', 'curvature', 'C'}
+                    [q0p, qLp] = obj.calculate_power_flow_curvature();
             end
         end
         function [q0p, qLp] = calculate_power_flow_normal(obj)
             [N0, NL, N0L, NL0] = obj.calculate_normal_resultants();
             [uSd, vSd, ~] = obj.calculate_conj_velocities();
-            q0p = 1/2*real(N0.*uSd + N0L.*vSd);
-            qLp = 1/2*real(NL.*vSd + NL0.*uSd);
+            q0p = -1/2*real(N0.*uSd + N0L.*vSd);
+            qLp = -1/2*real(NL.*vSd + NL0.*uSd);
         end
         function [q0p, qLp] = calculate_power_flow_bending(obj)
             [M0, ML, ~, ~] = obj.calculate_moment_resultants();
             [Beta0dotS, BetaLdotS] = obj.calculate_conj_ang_velocities();
-            q0p = 1/2*real(M0.*BetaLdotS);
-            qLp = 1/2*real(ML.*Beta0dotS);           
+            q0p = -1/2*real(M0.*BetaLdotS);
+            qLp = -1/2*real(ML.*Beta0dotS);           
         end
         function [q0p, qLp] = calculate_power_flow_twisting(obj)
             [~, ~, M0L, ML0] = obj.calculate_moment_resultants();
             [Beta0dotS, BetaLdotS] = obj.calculate_conj_ang_velocities();
-            q0p = 1/2*real(M0L .* Beta0dotS);
-            qLp = 1/2*real(ML0 .* BetaLdotS);
+            q0p = -1/2*real(M0L .* Beta0dotS);
+            qLp = -1/2*real(ML0 .* BetaLdotS);
         end
         function [q0p, qLp] = calculate_power_flow_shear(obj)
             [Q0, QL] = obj.calculate_shear_resultants();
             [~, ~, wSd] = obj.calculate_conj_velocities();
-            q0p = 1/2*real(Q0.*wSd);
-            qLp = 1/2*real(QL.*wSd);
+            q0p = -1/2*real(Q0.*wSd);
+            qLp = -1/2*real(QL.*wSd);
         end
+        %% calculate velocities
         function [ud, vd, wd] = calculate_velocities(obj)
             wd = obj.wdot;
             ud = zeros(size(obj.wdot));
@@ -604,6 +676,12 @@ classdef CylSimulator< handle
             vSd = conj(vd);
         end
         function [BdotO, BdotL] = calculate_ang_velocities(obj)
+            BdotO = obj.d2wdLt;
+            BdotL = obj.d2wd0t/obj.geometry.radius;
+        end
+        function [BdotX, BdotY] = calculate_beta_dots(obj)
+            BdotX = obj.d2wdyt;
+            BdotY = obj.d2wdxt;
         end
         function val = get_ang_vel(obj, type)
             if contains(type, 'L')
@@ -616,6 +694,155 @@ classdef CylSimulator< handle
             [Bdot0, BdotL] = obj.calculate_ang_velocities();
             beta0dotS = conj(Bdot0);
             betaLdotS = conj(BdotL);
+        end
+        %% plotting helpers
+        function plot_pf_forces(obj, axisHandle)
+            if nargin < 2
+                axisHandle = gca;
+            end
+            for i = 1:length(obj.forces)
+                if obj.forces(i).enabled
+                    Y = obj.forces(i).xStar;
+                    X = obj.forces(i).tStar* obj.geometry.radius;
+                    hold on;
+                    scatter(axisHandle, X,Y, 'x', 'MarkerEdgeColor', [0 0 0], 'SizeData', 100)
+                    hold off;
+                end
+            end
+        end
+        function plot_forces(obj, Z, axisHandle)
+            if nargin < 3
+                axisHandle = gca;
+            end
+            for i = 1:length(obj.forces)
+                if obj.forces(i).enabled
+                    Y = obj.forces(i).xStar;
+                    X = obj.forces(i).tStar* obj.geometry.radius;
+                    hold on;
+                    scatter3(axisHandle, X,Y,Z,'MarkerEdgeColor', [0 0 0] , 'MarkerFaceColor', [.1,.1,.1], 'SizeData', 50)
+                    hold off;
+                end
+            end
+        end
+        function [Th, Lng, values] = get_plot_values(obj, type, isReal)
+            [Th, Lng] = meshgrid(obj.thetas, obj.longs);
+            switch type
+                case {'w', 'W'}
+                    values = obj.w;
+                case {'wDot', 'WDot', 'Wdot', 'wdot', 'dwdt'}
+                    values = obj.wdot;
+                case {'dwdL', 'dwd0', 'd2wdL2', 'd2wdL0', 'd2wd02', 'd3wdL3', 'd3wdL20', 'd3wdL02', 'd3wd03', 'd2wdLt', 'd2wd0t'}
+                    values = obj.(type);
+                case {'M0', 'ML', 'ML0', 'M0L', 'N0', 'NL', 'N0L', 'NL0', 'Q0', 'QL'}
+                    values = obj.calculate_resultant(type);
+                case {'B0', 'BL'}
+                    values = obj.get_ang_vel(type);
+                otherwise
+                    warning('Requested info not availble: check type entered');
+                    values = nan(size(obj.w));
+            end
+            if isReal
+                values = real(values);
+            else
+                values = imag(values);
+            end
+        end
+        function [X,Y,U,V] = get_quiver_values(obj, type)
+            [X,Y] = meshgrid(obj.thetas, obj.longs);
+            if nargin < 2 || isempty(type)
+                [U,V] = obj.calculate_power_flow();
+            else
+                [U, V] = obj.calculate_power_flow_part(type);
+            end                
+        end 
+        function clear_animation_timer(obj)
+            if ~isempty(obj.animationTimer)
+                stop(obj.animationTimer);
+                delete(obj.animationTimer);
+                obj.animationTimer = [];
+            end
+        end
+        function setupTimer(obj, duration)
+            dt = .033; % about 30 Hz
+            if nargin >1
+                steps = floor(duration/dt);
+            else
+                steps = obj.timesteps * 5;
+            end
+            obj.animationTimer = timer('TimerFcn',@(~,~) obj.plot_next_animation_frame,...
+                                    'ExecutionMode','fixedRate',...
+                                    'Period',dt,...
+                                    'TasksToExecute',steps);
+        end
+        function plot_next_animation_frame(obj)
+            if size(obj.surfZ,3) > 1
+                Z = obj.surfZ(:,:,1);
+            else
+                Z = obj.surfZ;
+            end
+            if isempty(obj.aniPlotHandle) || ~isgraphics(obj.aniPlotHandle)
+                obj.aniPlotHandle = figure();
+                obj.aniPlotHandle.DeleteFcn = @(~,~) obj.clear_animation_timer();
+                obj.surfHandle = surf(obj.surfX, obj.surfY, Z, obj.loopedValues(:,:,obj.currentLoopStep));
+                axis equal
+                obj.surfHandle.EdgeAlpha = 0.0;
+                obj.surfHandle.FaceColor = 'interp';
+                colorbar
+                clim = max(max(max(obj.loopedValues)));
+                caxis([-clim, clim]) 
+            else
+                obj.surfHandle.ZData = Z;
+                obj.surfHandle.CData = obj.loopedValues(:,:,obj.currentLoopStep);
+            end
+            sz = size(obj.loopedValues,3);
+            obj.currentLoopStep = mod(obj.currentLoopStep+1, sz)+1; 
+        end
+        function cyl_disp_animation_loop(obj, useReal)
+            if isgraphics(obj.aniPlotHandle)
+                delete(obj.aniPlotHandle);
+            end
+            obj.currentLoopStep = 1;
+            if nargin < 2 
+                useReal = true;
+            end
+            [T, H] = meshgrid([obj.thetas 0], obj.longs);
+            obj.surfX = obj.geometry.radius *cos(T);
+            obj.surfY = obj.geometry.radius * sin(T);
+            obj.surfZ = H;
+            t = obj.calc_time_vector();
+            ft(1,1,:) = exp(1i*obj.forces(1).omega*t);
+            values = obj.w .*ft;
+            if useReal
+                values = real(values);
+            else
+                values = imag(values);
+            end
+            obj.loopedValues = zeros(size(values) + [0 1 0]);
+            for i = 1:size(values,3)
+                obj.loopedValues(:,:,i) = [values(:,:,i)  values(:,1,i)];
+            end            
+        end
+        function flat_disp_animation_loop(obj, useReal)
+            if isgraphics(obj.aniPlotHandle)
+                delete(obj.aniPlotHandle);
+            end
+            obj.currentLoopStep = 1;
+            if nargin < 2 
+                useReal = true;
+            end
+            [T, H] = meshgrid(obj.thetas, obj.longs);
+            obj.surfX = obj.geometry.radius * T;
+            obj.surfY = H;
+            t = obj.calc_time_vector();
+            ft(1,1,:) = exp(1i*obj.forces(1).omega*t);
+            values = obj.w .*ft;
+            if useReal
+                values = real(values);
+            else
+                values = imag(values);
+            end
+            obj.surfZ = values;
+            obj.loopedValues = values;      
         end
         %% helpers
         function clean_all_simulated_variables(obj, Lsize, Tsize)
@@ -638,18 +865,21 @@ classdef CylSimulator< handle
             end
         end
         function denom = calculate_denominator(obj, frc, M, N)
-            wmn = obj.nOmega(M, N+1); % N is naturally zero based so the one shifts to the correct index
-            wratsqr = (frc.omega/wmn)^2; 
-            if obj.dampingOn
-                if obj.constDamp
-                    zeta = obj.material.eta;
-                else
-%                     zeta = obj.lambda/(2*obj.material.density*obj.geometry.thickness*wmn); % find source for this to verify
-                    zeta = obj.material.eta*wmn/(2*frc.omega);
-                end
+            if obj.mesh.longitude_modes == 1
+                wmn = obj.nOmega(N+1);
             else
-                zeta = 0.0;
+                wmn = obj.nOmega(M, N+1); % N is naturally zero based so the one shifts to the correct index
             end
+            wratsqr = (frc.omega/wmn)^2; 
+%             if obj.dampingOn
+%                 if obj.constDamp
+%                     zeta = obj.material.eta;
+%                 else
+                    zeta = obj.material.eta*wmn/(2*frc.omega); %% see soedel equ 8.3.3 and 14.2.21
+%                 end
+%             else
+%                 zeta = 0.0;
+%             end
             denom = wmn^2.*((1 - wratsqr)^2 + (4*zeta^2*wratsqr))^0.5;
             if N == 0
                 denom = denom*2;
@@ -670,15 +900,7 @@ classdef CylSimulator< handle
             t =  linspace(0, 1/obj.forces(1).frequency, obj.timesteps+1);
             timeVector = t(1:end-1); % get rid of last to prevent aliasing
         end
-        function value = sortedNFs(obj, num)
-            if nargin < 2
-                num = Inf;
-            end
-            value = sort(reshape(obj.naturalFrequencies,[numel(obj.nOmega),1]));
-            if length(value) > num
-                value = value(1:num);
-            end
-        end
+        
         function value = lambda(obj)
             value = obj.material.density*obj.geometry.thickness*obj.material.eta*obj.forces(1).omega;
         end
@@ -686,13 +908,13 @@ classdef CylSimulator< handle
             E = obj.material.E;
             mu = obj.material.poisson;
             h = obj.geometry.thickness;
-            D = E*h^3/(12*(1-mu^2)); % soedel eq 2.5.16 Bending Stiffness
+            D =  E*h/(1-mu^2); % soedel eq 2.5.10
         end
         function K = calc_K(obj)
             E = obj.material.E;
             mu = obj.material.poisson;
             h = obj.geometry.thickness;
-            K = E*h/(1-mu^2); % soedel eq 2.5.10; Membrane stiffness
+            K = E*h^3/(12*(1-mu^2)); % soedel eq 2.5.16
         end
         %% default makers
         function create_default(obj)
@@ -700,7 +922,7 @@ classdef CylSimulator< handle
             obj.forces = [sinusoidalForce(1), sinusoidalForce(2)];
             obj.material = simMaterial();
             obj.mesh = meshDetails();
-            obj.timesteps = 20;
+            obj.timesteps = 100;
             obj.saveFolder = "C:\Users\ME\Desktop\Simulated Data\";
         end
         function create_default_at_frequency(obj, frequency)

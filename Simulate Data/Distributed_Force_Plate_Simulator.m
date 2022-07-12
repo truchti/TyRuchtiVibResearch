@@ -16,7 +16,6 @@ classdef Distributed_Force_Plate_Simulator < handle
         D
         lambda
         time
-        SpikeN
     end
     properties (Hidden = true)
         timesteps = 20
@@ -94,12 +93,19 @@ classdef Distributed_Force_Plate_Simulator < handle
             props = Plate_Properties(obj.geometry.width, obj.geometry.height, obj.geometry.thickness, obj.material.E, obj.material.poisson);
         end
         %% plotting functions
-        function [qx, qy] = show_full_analytical_power_flow(obj)
-            [Wid, Hei] = ndgrid(obj.widths, obj.heights);
-            [qx, qy] = obj.calculate_power_flow();
-            quiver(Wid, Hei, qx, qy);
+        function plot_RI_component(obj)
         end
-        function [qxp, qyp] = show_power_flow_part(obj, type)
+%         function [qx, qy] = plot_power_flow(obj)
+%             [Wid, Hei] = ndgrid(obj.widths, obj.heights);
+%             
+%             quiver(Wid, Hei, qx, qy);
+%             axis equal
+%         end
+        
+        function [qxp, qyp] = plot_power_flow(obj, type)
+            if nargin < 2
+                type = 'Power Flow';
+            end
             switch type
                 case {'bending', 'b', 'bend'}
                     [qxp, qyp] = obj.calculate_bending_power_flow();
@@ -107,6 +113,8 @@ classdef Distributed_Force_Plate_Simulator < handle
                     [qxp, qyp] = obj.calculate_twisting_power_flow();
                 case {'shear', 's'}
                     [qxp, qyp] = obj.calculate_shear_power_flow();
+                otherwise
+                    [qxp, qyp] = obj.calculate_power_flow();
             end
             [Wid, Hei] = ndgrid(obj.widths, obj.heights);
             quiver(Wid, Hei, qxp, qyp, 'color', [1 0 .2]);
@@ -539,10 +547,6 @@ classdef Distributed_Force_Plate_Simulator < handle
         end
         function value = get.widths(obj)
             value = linspace(0, obj.geometry.width, obj.mesh.width_divisions+1);
-        end
-        function value = get.SpikeN(obj)
-            dfreq = 1/max(obj.time);
-            value = round(obj.forces(1).frequency/dfreq);
         end
         function value = get.time(obj)
             t =  linspace(0, 1/obj.forces(1).frequency, obj.timesteps+1);
