@@ -9,10 +9,7 @@ classdef CylindricalPowerFlowResultants
         % calculated
         xi % the parameter that represents distance in the tangential direction
         eta % the parameter that represents distance in the longitudinal direction
-    end
-    properties (Dependent)
-        
-    end
+    end 
     properties (Hidden = true)
         D % stiffness coeff
         K % rigidity coeff

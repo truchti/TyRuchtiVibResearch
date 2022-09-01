@@ -54,7 +54,7 @@ classdef quinticSplineEvaluator < matlab.mixin.Copyable
             view(0,90); colormap jet; colorbar;
         end
         function plot_spline(obj, xi)
-            v = obj.evaluate_parameters(xi);
+            v = obj.evaluate_at_parameters(xi);
             plot(xi,v);
         end
         
@@ -82,7 +82,7 @@ classdef quinticSplineEvaluator < matlab.mixin.Copyable
     end
     methods (Access = private)
         function create_basis_evaluator(obj)
-            obj.basisEvaluator = quinticSplineBasisEvaluator(obj.knotVector,obj.controlPoints, obj.splineType);
+            obj.basisEvaluator = quinticSplineBasisEvaluator(obj.knotVector, obj.controlPoints, obj.splineType);
         end
         function validate_or_create_deriv_evaluations(obj, xi, eta)
             if isempty(obj.derivativeEvaluator) || isempty(obj.derivativeEvaluator.controlPoints)|| ~obj.derivativeEvaluator.check_xi_and_eta(xi,eta)

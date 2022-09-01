@@ -16,6 +16,7 @@ dxv = dx3(X,Y);
 dyv = dy3(X,Y);
 %% new method
 cfit = ChebyshevSurfaceFitter([23,24],xData, yData, values);
+cfit.create_fit_surface_object();
 csurf = cfit.fitSurface;
 %% quintic splines
 sfit = quinticBSplineSurfaceFitter([xData, yData], values, {'open', 'open'}, [9, 9]);

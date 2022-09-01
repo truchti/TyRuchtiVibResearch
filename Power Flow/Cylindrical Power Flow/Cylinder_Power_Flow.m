@@ -4,9 +4,7 @@ classdef Cylinder_Power_Flow <handle
     % is input then the data is extracted using the parser. If the raw data
     % is processed separately the processed data can be passed instead of a
     % parser
-    
-    % in all cases 'w' stands for radial deflection 'v' for theta
-    % deflection and 'u' for longitudinal deflection
+
     properties 
         laserData
         cylindricalData

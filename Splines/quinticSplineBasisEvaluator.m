@@ -21,9 +21,13 @@ classdef quinticSplineBasisEvaluator < handle
         order = 6;
     end
     methods
-        function obj = quinticSplineBasisEvaluator(knotVector, numberOfControlPoints, type)
+        function obj = quinticSplineBasisEvaluator(knotVector, ControlPoints, type)
             obj.knotVector = knotVector;
-            obj.numberOfControlPoints = numberOfControlPoints;
+            if length(ControlPoints) == 1
+                obj.numberOfControlPoints = ControlPoints;
+            else
+                obj.numberOfControlPoints = length(ControlPoints);
+            end
             obj.type = type;
         end
         function values = evaluate_at_parameter(obj, parameter)

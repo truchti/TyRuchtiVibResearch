@@ -1,4 +1,5 @@
 classdef SLDV_data_cyl_coors< SLDV_data
+    % coordinates are stored in (R, T, H)
     properties
         radius = 1;
     end
@@ -12,21 +13,16 @@ classdef SLDV_data_cyl_coors< SLDV_data
             end
             obj.flat_plot('disp', dim, imaginary);
         end
-        function plot_cyl_coors(obj)
-            obj.coordinates;
-            obj.radius;
-        end
         function flat_plot_velocity(obj, imaginary)
             if nargin < 2 
                 imaginary = false;
             end
             obj.flat_plot('vel', 2, imaginary);
         end
-        function [params, data, types] = get_cylindrical_spline_fitting_data(obj)
-            params = obj.coordinates(:, [1, 3]); % get the theta and longitudinal coordinate
-            params(:,2) = params(:,2)-min(params(:,2)); %translate so the min z value is zero
+        function [params, data] = get_cylindrical_spline_fitting_data(obj)
+            params = obj.coordinates(:, [2, 3]); % get the theta and longitudinal coordinate
+%             params(:,2) = params(:,2)-min(params(:,2)); %translate so the min z value is zero 
             data = obj.get_array_of_complex_displacement_and_velocity_values();
-            types = {'closed', 'open'};
         end
         function obj = eliminate_points_off_of_cylinder(obj)
             CCP = CylCoorParameterizer(obj);
@@ -41,17 +37,17 @@ classdef SLDV_data_cyl_coors< SLDV_data
     methods(Hidden = true)
         function flat_plot(obj, type, dimension, imaginary)
             if strcmp(type, 'disp')
-                [T,R,H] = obj.separate_displacements(imaginary);
+                [R,T,H] = obj.separate_displacements(imaginary);
             elseif strcmp(type, 'vel')
-                [T,R,H] = obj.separate_velocities(imaginary);
+                [R,T,H] = obj.separate_velocities(imaginary);
             else
                 error('Wrong Type')
             end
             switch dimension
                 case 1
-                    plotData = T;
-                case 2
                     plotData = R;
+                case 2
+                    plotData = T;
                 case 3
                     plotData = H;
             end

@@ -1,3 +1,4 @@
+%% test for Chebyshev Fit of 1D sinusoidal equation and derivatives
 x = linspace(0, 1.2, 86);
 f = @(x) sin(2*pi*x/1.2).*x.^2;
 df = @(x) 2*x.*sin((5*pi*x)/3) + (5*pi*x.^2.*cos((5*pi*x)/3))/3;

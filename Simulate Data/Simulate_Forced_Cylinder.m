@@ -1,3 +1,5 @@
+%% DEPRECIATED
+
 classdef Simulate_Forced_Cylinder< handle
     % This class simulates the displacement field of a cylinder subjected
     % to 2 point loads both driving at the same frequency but they can be

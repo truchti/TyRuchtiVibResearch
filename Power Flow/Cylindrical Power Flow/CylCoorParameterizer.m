@@ -41,7 +41,7 @@ classdef CylCoorParameterizer < handle
             points = obj.rotatedCart.coordinates;
             %put in 1 3 2 since y is the cylinder axis
             [theta, rad, h] = cart2pol(points(:,1), points(:,3), points(:,2)); 
-            coors = [theta, rad, h];
+            coors = [rad, theta,  h];
             [reD, imD, reV, imV] = obj.convert_measurements_using_theta(theta);
             obj.dataCylindrical = SLDV_data_cyl_coors(coors, reD, imD, reV, imV, obj.rotatedCart.frequency);
         end

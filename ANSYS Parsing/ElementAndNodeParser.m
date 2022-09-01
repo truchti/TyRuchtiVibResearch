@@ -23,7 +23,7 @@ classdef ElementAndNodeParser < handle
         imagNodeData
         projectName = 'Model'
         listOfElemResults = {'N11', 'N22', 'N12', 'M11', 'M22', 'M12', 'Q1', 'Q2'};
-        listOfNodalResults = {'u', 'v', 'w', 'udot', 'vdot', 'wdot'};
+        listOfNodalResults = {'rad', 'theta', 'long', 'rdot', 'thdot', 'ldot'};
         isCylinder = false;
         nodeNumToIndex
         progBar

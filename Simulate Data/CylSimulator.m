@@ -1,4 +1,5 @@
 classdef CylSimulator< handle
+    % coordinates should be (R, Theta, Z)
     % This class simulates the displacement field of a cylinder subjected
     % to 2 point loads both driving at the same frequency but they can be
     % phased independently.
@@ -9,7 +10,7 @@ classdef CylSimulator< handle
         forces
         geometry
         mesh
-        saveFolder = 'C:\Users\ME\Desktop\RandomData\';
+        saveFolder = 'C:\Users\tysum\Documents\SimulatedData';
         phaseCorrection = true
     end
     properties(Dependent)
@@ -738,7 +739,8 @@ classdef CylSimulator< handle
                 case {'B0', 'BL'}
                     values = obj.get_ang_vel(type);
                 otherwise
-                    warning('Requested info not availble: check type entered');
+                    warning('Requested info not availble: Check type entered');
+                    fprintf('Possible Types are: w, wDot, dwdL, dwd0, d2wdL2, d2wdL0, d2wd02, d3wdL3, d3wdL20, d3wdL02, d3wd03, d2wdLt, d2wd0t or resultants L/0')
                     values = nan(size(obj.w));
             end
             if isReal
@@ -923,7 +925,7 @@ classdef CylSimulator< handle
             obj.material = simMaterial();
             obj.mesh = meshDetails();
             obj.timesteps = 100;
-            obj.saveFolder = "C:\Users\ME\Desktop\Simulated Data\";
+%             obj.saveFolder = "C:\Users\ME\Desktop\Simulated Data\";
         end
         function create_default_at_frequency(obj, frequency)
             obj.geometry = cylinderGeometry();
@@ -931,7 +933,7 @@ classdef CylSimulator< handle
             obj.material = simMaterial();
             obj.mesh = meshDetails();
             obj.timesteps = 20;
-            obj.saveFolder = "C:\Users\ME\Desktop\Simulated Data\";
+%             obj.saveFolder = "C:\Users\ME\Desktop\Simulated Data\";
         end
         %% coordinate conversion
         function convert_to_rectangular_coordinates(obj)

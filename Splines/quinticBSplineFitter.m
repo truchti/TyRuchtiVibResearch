@@ -16,6 +16,12 @@ classdef quinticBSplineFitter < matlab.mixin.Copyable
     end
     methods
         function obj = quinticBSplineFitter(parameters, data, type, numberControlPoints, numberOfRepeatedNodes)
+            if isrow(parameters)
+                parameters = parameters';
+            end
+            if size(data,1) == 1
+                data = data';
+            end
             obj.xiParams = parameters;
             obj.data = data;    obj.splineType = type;
             obj.numControlPts = numberControlPoints;
@@ -28,7 +34,8 @@ classdef quinticBSplineFitter < matlab.mixin.Copyable
         end
         function xiB = fit_spline(obj)
             %% Set up evaluator with all zero control Points
-            obj.splineEvaluator = quinticSplineEvaluator(obj.xiKnot, obj.numControlPts, obj.splineType);
+            CPs = zeros(obj.numControlPts, 1); % load dummy control points in initially since they will be solved for
+            obj.splineEvaluator = quinticSplineEvaluator(obj.xiKnot, CPs, obj.splineType);
             %evaluate basis functions
             xiB = obj.splineEvaluator.evaluate_basis_functions(obj.xiParams);
             for i = size(obj.data,2):-1:1

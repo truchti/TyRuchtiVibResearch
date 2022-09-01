@@ -6,14 +6,14 @@ classdef meshDetails
         theta_divisions
     end
     methods
-        function obj = meshDetails(modesL, modesT, divsL, divsT)
+        function obj = meshDetails(modesT, modesL, divsT, divsL)
             if nargin < 1
                 obj = obj.create_default();
             else
-                obj.longitude_modes = modesL;
                 obj.theta_modes = modesT;
-                obj.longitude_divisions = divsL;
+                obj.longitude_modes = modesL;
                 obj.theta_divisions= divsT;
+                obj.longitude_divisions = divsL;
             end
         end
         function obj = create_default(obj)

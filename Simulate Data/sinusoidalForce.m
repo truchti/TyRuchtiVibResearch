@@ -1,4 +1,5 @@
 classdef sinusoidalForce < handle
+    % location is theta, height
     properties
         location
         magnitude
@@ -38,10 +39,10 @@ classdef sinusoidalForce < handle
             value = obj.frequency*2*pi;
         end
         function value = get.xStar(obj)
-            value = obj.location(1);
+            value = obj.location(2);
         end
         function value = get.tStar(obj)
-            value = obj.location(2);
+            value = obj.location(1);
         end
         function obj = create_default_1(obj)
             obj.location  = [.025, 0*pi/180];
@@ -67,11 +68,11 @@ classdef sinusoidalForce < handle
             obj.frequency = 60;
             obj.phase = 178;
         end
-        function set_angle_loc(obj, angle)
-            obj.location(2) = angle;
+        function set_theta_location(obj, angle)
+            obj.location(1) = angle;
         end
-        function set_height_loc(obj, height)
-            obj.location(1) = height;
+        function set_height_location(obj, height)
+            obj.location(2) = height;
         end
     end
 end

@@ -60,7 +60,7 @@ classdef quinticSplineSurfacePlotter < handle
             obj.plottingPoints_eta = linspace(0, obj.max_eta, obj.numberInterpPoints(2));
         end
         function values = evaluate_spline_at_plotting_points(obj, type, isImaginary, dimension, derivative)
-            if nargin < 5 
+            if nargin < 5
                 derivative = '';
             end
             if nargin < 4
