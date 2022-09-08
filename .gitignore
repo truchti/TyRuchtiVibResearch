@@ -1,13 +1,10 @@
 # Ignore asv files
-*.asv
-
-Splines\Tests\**
-ANSYS Parsing\Tests\**
-
 
 /ANSYS Parsing/Tests
-/Power Flow/Cylindrical Power Flow/Depreciated Cyl Power Flow/rewriteMusings.m
 /Splines/Tests
 /SLDV Parsing/Tests
 /Simulate Data/Tests
 /Power Flow/Cylindrical Power Flow/Tests
+
+/Power Flow/Cylindrical Power Flow/Depreciated Cyl Power Flow/rewriteMusings.m
+/Simulate Data/*.asv
