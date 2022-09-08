@@ -1,0 +1,7 @@
+# Ignore asv files
+*.asv
+
+Splines\Tests\**
+ANSYS Parsing\Tests\**
+
+
