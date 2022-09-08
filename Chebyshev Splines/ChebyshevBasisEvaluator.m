@@ -11,7 +11,7 @@ classdef ChebyshevBasisEvaluator < handle
         function obj = ChebyshevBasisEvaluator(order)
             obj.order = order;
         end
-        function fx = eval(obj,xi)
+        function fx = evaluate_at_parameter(obj,xi)
             fx = obj.evaluate_T_basis_at_xi(xi);
         end
         function dfx = deriv_eval(obj,xi, deriv)
@@ -33,7 +33,7 @@ classdef ChebyshevBasisEvaluator < handle
             if nargin < 3
                 pts = linspace(-1, 1, 1000);
             end
-            f = obj.eval(pts);
+            f = obj.evaluate_at_parameter(pts);
             df = obj.deriv_eval(pts,1);
             d2f = obj.deriv_eval(pts,2);
             d3f = obj.deriv_eval(pts,3);

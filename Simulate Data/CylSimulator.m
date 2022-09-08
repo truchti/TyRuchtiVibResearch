@@ -55,7 +55,7 @@ classdef CylSimulator< handle
           aniPlotHandle
           surfHandle
     end
-    %% dimensional derivatives
+    %% directional derivatives
     properties(Hidden = true, Dependent = true)
         % length coors
         dwdx, dwdy
@@ -178,8 +178,6 @@ classdef CylSimulator< handle
             Y = sin(Th)*obj.geometry.radius;
             Z = Lng;
             phandle = surf(X,Y,Z,value, 'EdgeAlpha', .25);
-%             axis equal
-%             colormap jet
             colorbar
         end
         function plot_RI_cyl_component(obj, type)
@@ -743,7 +741,7 @@ classdef CylSimulator< handle
                     fprintf('Possible Types are: w, wDot, dwdL, dwd0, d2wdL2, d2wdL0, d2wd02, d3wdL3, d3wdL20, d3wdL02, d3wd03, d2wdLt, d2wd0t or resultants L/0')
                     values = nan(size(obj.w));
             end
-            if isReal
+            if nargin < 3 || isReal
                 values = real(values);
             else
                 values = imag(values);
@@ -902,7 +900,6 @@ classdef CylSimulator< handle
             t =  linspace(0, 1/obj.forces(1).frequency, obj.timesteps+1);
             timeVector = t(1:end-1); % get rid of last to prevent aliasing
         end
-        
         function value = lambda(obj)
             value = obj.material.density*obj.geometry.thickness*obj.material.eta*obj.forces(1).omega;
         end
@@ -944,7 +941,7 @@ classdef CylSimulator< handle
             ytrans = reshape(repmat(sin(obj.thetas), length(obj.longs),1), length(obj.thetas)*length(obj.longs),1);
             xcoord = obj.geometry.radius*xtrans;
             ycoord = obj.geometry.radius*ytrans;
-            zcoord = repmat(obj.thetas,length(obj.thetas),1)';
+            zcoord = repmat(obj.longs,length(obj.thetas),1)';
             tdata.myX = reshape(xcoord,numel(xcoord), 1);
             tdata.myY = reshape(ycoord,numel(ycoord), 1);
             tdata.myZ = reshape(zcoord,numel(zcoord), 1);
